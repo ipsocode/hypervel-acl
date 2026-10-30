@@ -123,7 +123,7 @@ class SetupCommand extends Command
 
     /**
      * Get the stubs to copy: the inheritance column for the application's own team table, and,
-     * with acl.tenant on, the tenant column for the permission and team tables, and, with
+     * with acl.tenant on, the tenant column for the permission, team and org role tables and the unique keys it leads, and, with
      * acl.workspace on, the partition column for the permission tables and, for the application's
      * own workspace model, its parent column.
      *
@@ -135,7 +135,7 @@ class SetupCommand extends Command
     {
         return [
             ...(Teams::usesPackageModel() ? [] : ['add_team_inheritance']),
-            ...(Teams::tenantColumn() !== null ? ['add_tenant_column'] : []),
+            ...(Teams::tenantColumn() !== null ? ['add_tenant_column', 'lead_tenant_unique_keys'] : []),
             ...(Workspaces::enabled() ? ['add_workspace_column'] : []),
             ...(Workspaces::enabled() && Workspaces::model() !== null && ! Workspaces::usesPackageModel() ? ['add_workspace_parent'] : []),
         ];

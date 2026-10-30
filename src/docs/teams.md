@@ -27,7 +27,7 @@ A request without a session, such as an API request authenticated by token, keep
 
 ## Tenants
 
-Set `acl.tenant` to `true` to keep each tenant's roles, permissions and teams apart. The setup command then adds a tenant column, named by `acl.column_names.tenant_foreign_key`, to the five permission tables and the team table, and puts the tenant first in the unique keys of role and permission names, so two tenants may each have a role of the same name. Point `permission.models.role` and `permission.models.permission` at the package's `Ipsocode\Acl\Models\Role` and `Ipsocode\Acl\Models\Permission`, or add the `BelongsToTenant` trait to your own models.
+Set `acl.tenant` to `true` to keep each tenant's roles, permissions and teams apart. The setup command then adds a tenant column, named by `acl.column_names.tenant_foreign_key`, to the five permission tables, the team table and the org role table, and puts the tenant first in the unique keys of role and permission names and of a user's org role, so two tenants may each have a role of the same name. If you enabled tenants on an earlier version, run `php artisan acl:setup` and `php artisan migrate` again: the `lead_tenant_unique_keys` migration it adds gives the keys to an install that already ran the tenant migration. Point `permission.models.role` and `permission.models.permission` at the package's `Ipsocode\Acl\Models\Role` and `Ipsocode\Acl\Models\Permission`, or add the `BelongsToTenant` trait to your own models.
 
 The current tenant lives in `Ipsocode\Acl\Tenant`, for the current request or job only:
 

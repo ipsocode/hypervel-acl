@@ -53,6 +53,20 @@ class FactoryTest extends TestCase
         $this->assertSame([$b->id], $second->memberKeys());
     }
 
+    public function testInTeamMayComeAfterRoleAndMember(): void
+    {
+        $team = AclTeam::create(['name' => 'Ops']);
+        $team->syncTeamRoles(['editor']);
+
+        $member = User::factory()->member()->inTeam($team)->create();
+        $viewer = User::factory()->role('viewer')->inTeam($team)->create();
+
+        $this->assertSame([$member->id], $team->memberKeys());
+
+        $this->app->make(PermissionRegistrar::class)->setPermissionsTeamId($team);
+        $this->assertTrue(User::find($viewer->id)->hasRole('viewer'));
+    }
+
     public function testStatesNeedATeam(): void
     {
         $this->expectException(LogicException::class);

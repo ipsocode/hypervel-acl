@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Ipsocode\Acl\Testing\Factories;
 
+use Closure;
 use Hypervel\Database\Eloquent\Model;
 use Hypervel\Permission\PermissionRegistrar;
+use Hypervel\Support\Collection;
 use Ipsocode\Acl\Contracts\Team;
 use LogicException;
 
@@ -20,14 +22,17 @@ trait AssignsAcl
     protected ?Model $aclTeam = null;
 
     /**
+     * @var list<Closure(Model, Model&Team): void>
+     */
+    protected array $aclSteps = [];
+
+    /**
      * Assign roles directly, under the team set by inTeam(), after the model is created.
      */
     public function role(string ...$roles): static
     {
-        $team = $this->aclTeam;
-
-        return $this->afterCreating(function ($model) use ($team, $roles): void {
-            app(PermissionRegistrar::class)->setPermissionsTeamId($this->aclTeamFor($team));
+        return $this->withAclStep(function (Model $model, Model $team) use ($roles): void {
+            app(PermissionRegistrar::class)->setPermissionsTeamId($team);
 
             $model->assignRole(...$roles); // @phpstan-ignore method.notFound (the model uses HasRoles)
         });
@@ -38,11 +43,7 @@ trait AssignsAcl
      */
     public function member(): static
     {
-        $team = $this->aclTeam;
-
-        return $this->afterCreating(function ($model) use ($team): void {
-            $this->aclTeamFor($team)->addUser($model);
-        });
+        return $this->withAclStep(fn (Model $model, Model $team) => $team->addUser($model)); // @phpstan-ignore method.notFound (the team is an AclTeam)
     }
 
     /**
@@ -59,12 +60,38 @@ trait AssignsAcl
     }
 
     /**
-     * @param null|(Model&Team) $team
-     * @return Model&Team
+     * Run a step on each created model, in the team set by whichever inTeam() call comes last.
+     *
+     * @param Closure(Model, Model&Team): void $step
      */
-    protected function aclTeamFor(?Model $team): Team
+    protected function withAclStep(Closure $step): static
     {
-        return $team ?? throw new LogicException('Assigning roles needs a team: use inTeam().');
+        $instance = $this->newInstance();
+        $instance->aclSteps[] = $step;
+
+        return $instance;
+    }
+
+    /**
+     * Run the role and member steps once the models exist.
+     *
+     * @param Collection<int, Model> $instances
+     */
+    protected function callAfterCreating(Collection $instances, ?Model $parent = null): void
+    {
+        parent::callAfterCreating($instances, $parent);
+
+        if ($this->aclSteps === []) {
+            return;
+        }
+
+        $team = $this->aclTeam ?? throw new LogicException('Assigning roles needs a team: use inTeam().');
+
+        foreach ($instances as $model) {
+            foreach ($this->aclSteps as $step) {
+                $step($model, $team);
+            }
+        }
     }
 
     /**
@@ -74,6 +101,7 @@ trait AssignsAcl
     {
         $instance = parent::newInstance($arguments);
         $instance->aclTeam = $this->aclTeam;
+        $instance->aclSteps = $this->aclSteps;
 
         return $instance;
     }
