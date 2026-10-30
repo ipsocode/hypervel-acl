@@ -139,7 +139,7 @@ trait IsTeam
     public function memberKeys(): array
     {
         /** @var list<int|string> $keys */
-        $keys = DB::table(Teams::membersTable())->where(Teams::teamPivotKey(), $this->getKey())->distinct()->pluck(Teams::userPivotKey())->all();
+        $keys = DB::table(Teams::ORGANIZATION_TABLE)->where(Teams::teamPivotKey(), $this->getKey())->distinct()->pluck(Teams::userPivotKey())->all();
 
         return $keys;
     }
@@ -193,7 +193,7 @@ trait IsTeam
             // Two concurrent adds for one user would each pass the check below: the user's row serializes them.
             $user->newQuery()->whereKey($user->getKey())->lockForUpdate()->value($user->getKeyName());
 
-            $members = DB::table(Teams::membersTable());
+            $members = DB::table(Teams::ORGANIZATION_TABLE);
 
             if ($workspaces) {
                 app('events')->dispatch(new OrgRoleAdding($this, $user, $workspace));
@@ -224,7 +224,7 @@ trait IsTeam
      */
     public function removeUser(Model $user, int|string|null $workspace = null): void
     {
-        $members = DB::table(Teams::membersTable())->where(Teams::teamPivotKey(), $this->getKey())->where(Teams::userPivotKey(), $user->getKey());
+        $members = DB::table(Teams::ORGANIZATION_TABLE)->where(Teams::teamPivotKey(), $this->getKey())->where(Teams::userPivotKey(), $user->getKey());
 
         (clone $members)->when($workspace !== null, fn ($query) => $query->where(Workspaces::column(), $workspace))->delete();
 

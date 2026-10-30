@@ -61,9 +61,8 @@ class AclServiceProvider extends ServiceProvider
 
             $this->publishesMigrations([
                 __DIR__ . '/../database/migrations/2026_10_29_000002_create_acl_teams_table.php' => database_path('migrations/2026_10_29_000002_create_acl_teams_table.php'),
-                __DIR__ . '/../database/migrations/2026_10_29_000003_create_acl_team_user_table.php' => database_path('migrations/2026_10_29_000003_create_acl_team_user_table.php'),
+                __DIR__ . '/../database/migrations/2026_10_29_000003_create_acl_organization_table.php' => database_path('migrations/2026_10_29_000003_create_acl_organization_table.php'),
                 __DIR__ . '/../database/migrations/2026_10_29_000004_create_acl_workspaces_table.php' => database_path('migrations/2026_10_29_000004_create_acl_workspaces_table.php'),
-                __DIR__ . '/../database/migrations/2026_10_29_000005_create_acl_team_workspace_user_table.php' => database_path('migrations/2026_10_29_000005_create_acl_team_workspace_user_table.php'),
             ], 'acl-migrations');
 
             $this->publishes([__DIR__ . '/../dist' => public_path('vendor/acl')], 'acl-assets');
@@ -79,15 +78,11 @@ class AclServiceProvider extends ServiceProvider
             $this->loadMigrationsFrom(__DIR__ . '/../database/migrations/2026_10_29_000002_create_acl_teams_table.php');
         }
 
-        if (Workspaces::enabled()) {
-            if (Workspaces::usesPackageModel()) {
-                $this->loadMigrationsFrom(__DIR__ . '/../database/migrations/2026_10_29_000004_create_acl_workspaces_table.php');
-            }
-
-            $this->loadMigrationsFrom(__DIR__ . '/../database/migrations/2026_10_29_000005_create_acl_team_workspace_user_table.php');
-        } else {
-            $this->loadMigrationsFrom(__DIR__ . '/../database/migrations/2026_10_29_000003_create_acl_team_user_table.php');
+        if (Workspaces::enabled() && Workspaces::usesPackageModel()) {
+            $this->loadMigrationsFrom(__DIR__ . '/../database/migrations/2026_10_29_000004_create_acl_workspaces_table.php');
         }
+
+        $this->loadMigrationsFrom(__DIR__ . '/../database/migrations/2026_10_29_000003_create_acl_organization_table.php');
 
         $this->registerListeners();
 

@@ -229,6 +229,6 @@ class TeamTest extends TestCase
         $leaving->delete();
         $sales->delete();
 
-        $this->assertSame(0, DB::table(Teams::MEMBERS_TABLE)->count());
+        $this->assertSame(0, DB::table(Teams::ORGANIZATION_TABLE)->count());
     }
 }

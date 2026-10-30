@@ -25,8 +25,8 @@ class PivotKeysTest extends TestCase
 
     public function testTheMembershipColumnsTakeTheConfiguredNames(): void
     {
-        $this->assertTrue(Schema::hasColumns(Teams::MEMBERS_TABLE, ['group_id', 'member_id']));
-        $this->assertFalse(Schema::hasColumn(Teams::MEMBERS_TABLE, 'team_id'));
+        $this->assertTrue(Schema::hasColumns(Teams::ORGANIZATION_TABLE, ['group_id', 'member_id']));
+        $this->assertFalse(Schema::hasColumn(Teams::ORGANIZATION_TABLE, 'team_id'));
 
         (new AclSeeder)->run();
 

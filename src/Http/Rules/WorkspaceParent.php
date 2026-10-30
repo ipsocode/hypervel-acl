@@ -69,9 +69,9 @@ class WorkspaceParent implements ValidationRule
         $column = Workspaces::column();
         $user = Teams::userPivotKey();
 
-        return DB::table(Teams::membersTable())
+        return DB::table(Teams::ORGANIZATION_TABLE)
             ->whereIn($column, [$this->current, ...Workspaces::descendantKeys([$this->current])])
-            ->whereIn($user, DB::table(Teams::membersTable())->whereIn($column, Workspaces::ancestorKeys($parent))->select($user))
+            ->whereIn($user, DB::table(Teams::ORGANIZATION_TABLE)->whereIn($column, Workspaces::ancestorKeys($parent))->select($user))
             ->exists();
     }
 }

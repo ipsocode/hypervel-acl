@@ -10,6 +10,7 @@ use Hypervel\Support\Facades\DB;
 use Ipsocode\Acl\Exceptions\UserAlreadyInTeam;
 use Ipsocode\Acl\Http\Middleware\ResolveAcl;
 use Ipsocode\Acl\Models\AclTeam;
+use Ipsocode\Acl\Support\Teams;
 use Ipsocode\Acl\Support\Workspaces;
 use Ipsocode\Acl\Tests\WorkspaceTestCase;
 use Ipsocode\Acl\Workspace;
@@ -52,7 +53,7 @@ class FlatWorkspaceTest extends WorkspaceTestCase
         $ops->addUser($user, 'berlin');
         $sales->addUser($user, 'paris');
 
-        $this->assertSame(2, DB::table('acl_team_workspace_user')->where('user_id', $user->id)->count());
+        $this->assertSame(2, DB::table(Teams::ORGANIZATION_TABLE)->where('user_id', $user->id)->count());
 
         $this->expectException(UserAlreadyInTeam::class);
 

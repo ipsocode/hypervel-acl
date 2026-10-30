@@ -111,7 +111,7 @@ class AccessSync
 
         $rows->delete();
 
-        DB::table(Teams::membersTable())->whereIn(Teams::teamPivotKey(), $keys)->update(['updated_at' => $now]);
+        DB::table(Teams::ORGANIZATION_TABLE)->whereIn(Teams::teamPivotKey(), $keys)->update(['updated_at' => $now]);
 
         // The model's own date format keeps the milliseconds a bulk touch() would round away.
         Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($keys)->toBase()
