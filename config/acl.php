@@ -70,13 +70,15 @@ return [
     | Key Type
     |--------------------------------------------------------------------------
     |
-    | The key type of the team table: "id", "uuid" or "ulid". Leave it null to
-    | copy the permission tables: the type of their id column when they exist,
-    | else the one the configured role model uses.
+    | The key type of the package's tables: "id", "uuid" or "ulid". Leave it null
+    | to copy the permission tables: the type of their id column when they exist,
+    | else the one the configured role model uses. The user model's key must be
+    | the type of the morph key columns of the permission tables.
     |
     */
 
-    'key_type' => 'id',
+    'key_type' => null,
+
     /*
     |--------------------------------------------------------------------------
     | Guards
