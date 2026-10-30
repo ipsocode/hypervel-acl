@@ -222,7 +222,7 @@ class WorkspaceTest extends WorkspaceTestCase
     {
         [$ops, $user] = $this->ops();
 
-        session([ResolveAcl::SESSION_KEY => ['team' => $ops->id, 'at' => '2026-01-01 00:00:00']]);
+        session([ResolveAcl::SESSION_KEY => ['at' => '2026-01-01 00:00:00']]);
 
         $this->requestIn($user, $this->north->id);
 

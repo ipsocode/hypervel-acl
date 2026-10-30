@@ -23,11 +23,11 @@ A change to a team's roles applies to the team and to every team that inherits i
 
 When `ResolveAcl` builds a member's roles, it stores the time in the member's session. On the member's next request, a membership updated at or after that time is rebuilt for that one member. A team with many members is never rebuilt all at once.
 
-A request without a session, such as an API request authenticated by token, has nowhere to keep the time, so its roles are rebuilt on every request. A check made outside a request, such as in a queued job, finds no team roles for a member who has not made a request since the change. Call `AccessSync::refresh($user, $team)` first when it needs them.
+A request without a session, such as an API request authenticated by token, keeps the time in the cache for a day, per user, team and workspace, so its roles are rebuilt only after the membership changed or the cached time expired. A check made outside a request, such as in a queued job, finds no team roles for a member who has not made a request since the change. Call `AccessSync::refresh($user, $team)` first when it needs them.
 
 ## Tenants
 
-Set `acl.tenant` to `true` to keep each tenant's roles, permissions and teams apart. The setup command then adds a tenant column, named by `acl.column_names.tenant_foreign_key`, to the five permission tables and the team table. Point `permission.models.role` and `permission.models.permission` at the package's `Ipsocode\Acl\Models\Role` and `Ipsocode\Acl\Models\Permission`, or add the `BelongsToTenant` trait to your own models.
+Set `acl.tenant` to `true` to keep each tenant's roles, permissions and teams apart. The setup command then adds a tenant column, named by `acl.column_names.tenant_foreign_key`, to the five permission tables and the team table, and puts the tenant first in the unique keys of role and permission names, so two tenants may each have a role of the same name. Point `permission.models.role` and `permission.models.permission` at the package's `Ipsocode\Acl\Models\Role` and `Ipsocode\Acl\Models\Permission`, or add the `BelongsToTenant` trait to your own models.
 
 The current tenant lives in `Ipsocode\Acl\Tenant`, for the current request or job only:
 
