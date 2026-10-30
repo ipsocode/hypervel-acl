@@ -214,8 +214,6 @@ class Reach
     {
         $teams = DB::table(Teams::ORGANIZATIONS_TABLE)->whereIn(Workspaces::column(), $workspaces)->distinct()->pluck(Teams::teamPivotKey())->all();
 
-        foreach (Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($teams)->get() as $team) {
-            $this->sync->markChanged($team);
-        }
+        $this->sync->markChangedMany(Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($teams)->get());
     }
 }

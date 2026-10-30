@@ -428,6 +428,44 @@ class WorkspaceTest extends WorkspaceTestCase
         $this->assertSame(1, $this->rows($user, $this->branchB));
     }
 
+    public function testMovingAWorkspaceDoesNotRunMoreWritesForMoreTeams(): void
+    {
+        $writesFor = function (int $teams): int {
+            foreach (range(1, $teams) as $number) {
+                $team = AclTeam::create(['name' => "Team {$teams}.{$number}"]);
+                $team->syncTeamRoles(['editor']);
+                $team->addUser(User::factory()->create(), $this->branchB->id);
+            }
+
+            $writes = 0;
+            DB::listen(function ($query) use (&$writes): void {
+                $writes += preg_match('/^(insert|delete|update|savepoint|begin)/i', $query->sql);
+            });
+
+            $this->branchB->update(['parent_id' => $this->south->id]);
+            $this->branchB->update(['parent_id' => $this->north->id]);
+
+            return $writes;
+        };
+
+        $few = $writesFor(1);
+        $many = $writesFor(4);
+
+        $this->assertSame($few, $many);
+    }
+
+    public function testMovingAWorkspaceNoOrgRoleReachesMarksNothing(): void
+    {
+        $writes = 0;
+        DB::listen(function ($query) use (&$writes): void {
+            $writes += preg_match('/^delete from .model_has_roles/i', $query->sql);
+        });
+
+        $this->branchB->update(['parent_id' => $this->south->id]);
+
+        $this->assertSame(0, $writes);
+    }
+
     public function testANewWorkspaceIsCoveredByTheOrgRolesAboveIt(): void
     {
         $reach = $this->app->make(Reach::class);

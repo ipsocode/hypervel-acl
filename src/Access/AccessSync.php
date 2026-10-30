@@ -129,12 +129,38 @@ class AccessSync
      */
     public function markChanged(Team $team): void
     {
-        $keys = [$team->getKey(), ...$this->dependents($team)];
+        $this->markChangedMany([$team]);
+    }
+
+    /**
+     * Mark several teams, and every team that inherits any of them, as changed, touching, deleting
+     * and flushing once over all of them.
+     *
+     * @param iterable<Model&Team> $teams
+     */
+    public function markChangedMany(iterable $teams): void
+    {
+        $keys = [];
+        $morphClass = null;
+
+        foreach ($teams as $team) {
+            $morphClass = $team->getMorphClass();
+
+            foreach ([$team->getKey(), ...$this->dependents($team)] as $key) {
+                $keys[(string) $key] = $key;
+            }
+        }
+
+        if ($morphClass === null) {
+            return;
+        }
+
+        $keys = array_values($keys);
 
         // The teams' own rows, which hold each team's roles, stay.
         $rows = DB::table(Config::modelHasRolesTable())
             ->whereIn(Config::teamForeignKey(), $keys)
-            ->where('model_type', '!=', $team->getMorphClass());
+            ->where('model_type', '!=', $morphClass);
 
         $partitions = $this->partitions(clone $rows);
 
