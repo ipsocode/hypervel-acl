@@ -88,6 +88,14 @@ trait IsTeam
     }
 
     /**
+     * Delete the team together with its members' roles, or none of it.
+     */
+    public function delete(): int|bool|null
+    {
+        return $this->getConnection()->transaction(fn () => parent::delete());
+    }
+
+    /**
      * Get the guards the team's roles may belong to.
      *
      * @return list<string>
