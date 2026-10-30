@@ -7,11 +7,9 @@ namespace Ipsocode\Acl\Access;
 use Closure;
 use Hypervel\Contracts\Cache\Repository as CacheRepository;
 use Hypervel\Database\Eloquent\Model;
-use Hypervel\Database\Eloquent\Relations\Relation;
 use Hypervel\Database\Query\Builder as QueryBuilder;
 use Hypervel\Permission\PermissionRegistrar;
 use Hypervel\Permission\Support\Config;
-use Hypervel\Support\Collection;
 use Hypervel\Support\Facades\Date;
 use Hypervel\Support\Facades\DB;
 use Ipsocode\Acl\Contracts\Team;
@@ -20,7 +18,6 @@ use Ipsocode\Acl\Support\Teams;
 use Ipsocode\Acl\Support\Workspaces;
 use Ipsocode\Acl\Tenant;
 use Ipsocode\Acl\Workspace;
-use stdClass;
 
 class AccessSync
 {
@@ -166,13 +163,13 @@ class AccessSync
      */
     public function purge(Team $team): void
     {
-        foreach ($this->rows($team, withOwn: true) as $row) {
-            $subject = $this->subject($row);
+        $rows = DB::table(Config::modelHasRolesTable())->where(Config::teamForeignKey(), $team->getKey());
 
-            if ($subject !== null) {
-                $this->rebuildMember($subject, $team, remove: true, workspace: $row->workspace ?? null);
-            }
-        }
+        $partitions = $this->partitions(clone $rows);
+
+        $rows->delete();
+
+        $this->forgetCachedPermissions([$team->getKey()], $partitions);
     }
 
     /**
@@ -292,31 +289,6 @@ class AccessSync
         foreach ([$team->getKey(), ...$this->dependents($team)] as $key) {
             $this->cache->forget(self::CHAIN_CACHE_KEY_PREFIX . $key);
         }
-    }
-
-    /**
-     * Get the distinct subject type and subject key of the rows a team's roles are held in.
-     *
-     * @param Model&Team $team
-     * @return Collection<int, stdClass>
-     */
-    protected function rows(Team $team, bool $withOwn): Collection
-    {
-        return DB::table(Config::modelHasRolesTable())
-            ->where(Config::teamForeignKey(), $team->getKey())
-            ->when(! $withOwn, fn ($query) => $query->where('model_type', '!=', $team->getMorphClass()))
-            ->distinct()
-            ->get(['model_type', Config::morphKey() . ' as model_id', ...(Workspaces::enabled() ? [Workspaces::column() . ' as workspace'] : [])]);
-    }
-
-    /**
-     * Find the model a row holds roles for.
-     */
-    protected function subject(stdClass $row): ?Model
-    {
-        $class = Relation::getMorphedModel($row->model_type) ?? $row->model_type;
-
-        return $class::query()->find($row->model_id);
     }
 
     /**
