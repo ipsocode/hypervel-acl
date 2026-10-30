@@ -26,7 +26,7 @@ trait FindsTeamMigrations
         return [
             ...(Teams::usesPackageModel() ? [] : ['add_team_inheritance']),
             ...(Teams::tenantColumn() !== null ? ['add_tenant_column', 'lead_tenant_unique_keys'] : []),
-            ...(Workspaces::enabled() ? ['add_workspace_column'] : []),
+            ...(Workspaces::enabled() ? ['add_workspace_column', 'add_team_index'] : []),
             ...(Workspaces::enabled() && Workspaces::model() !== null && ! Workspaces::usesPackageModel() ? ['add_workspace_parent'] : []),
         ];
     }
