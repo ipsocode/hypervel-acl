@@ -9,6 +9,7 @@ use Hypervel\Database\Eloquent\Concerns\HasUuids;
 use Hypervel\Database\Schema\Blueprint;
 use Hypervel\Database\Schema\ColumnDefinition;
 use Hypervel\Database\Schema\ForeignIdColumnDefinition;
+use Hypervel\Permission\Guard;
 use Hypervel\Support\Facades\Schema;
 use Hypervel\Support\Str;
 
@@ -19,17 +20,17 @@ enum KeyType: string
     case Ulid = 'ulid';
 
     /**
-     * Get the key type of the package's tables: acl.key_type, else the permission models' own.
+     * Get the key type of the package's tables: acl.key_type, else the one the models generate.
      */
     public static function resolve(): self
     {
         $configured = config('acl.key_type');
 
-        return $configured !== null ? self::from($configured) : self::fromModel(config('permission.models.role'));
+        return $configured !== null ? self::from($configured) : self::fromModels();
     }
 
     /**
-     * Get the key type for a migration: acl.key_type, else the permissions table if it exists, else the model's.
+     * Get the key type for a migration: acl.key_type, else the permissions table if it exists, else the models'.
      */
     public static function forMigration(): self
     {
@@ -39,17 +40,47 @@ enum KeyType: string
             return self::from($configured);
         }
 
-        $table = config('permission.table_names.permissions');
+        return self::fromPermissionsTable() ?? self::fromModels();
+    }
 
+    /**
+     * Get the key type the role model generates, else the one the first guard's user model does.
+     */
+    public static function fromModels(): self
+    {
+        $role = self::fromModel(config('permission.models.role'));
+
+        if ($role !== self::Id) {
+            return $role;
+        }
+
+        $user = Guard::getModelForGuard(Config::guards()[0]);
+
+        return $user === null ? self::Id : self::fromModel($user);
+    }
+
+    /**
+     * Get the key type of the permissions table's id column, or null when the table is missing or names none.
+     */
+    public static function fromPermissionsTable(): ?self
+    {
+        return self::fromTable(config('permission.table_names.permissions'), 'id');
+    }
+
+    /**
+     * Get the key type of a table's column, or null when the table or column is missing or names none.
+     */
+    public static function fromTable(string $table, string $column): ?self
+    {
         if (Schema::hasTable($table)) {
-            foreach (Schema::getColumns($table) as $column) {
-                if ($column['name'] === 'id') {
-                    return self::fromColumn($column['type'], $column['type_name']) ?? self::fromModel(config('permission.models.role'));
+            foreach (Schema::getColumns($table) as $definition) {
+                if ($definition['name'] === $column) {
+                    return self::fromColumn($definition['type'], $definition['type_name']);
                 }
             }
         }
 
-        return self::fromModel(config('permission.models.role'));
+        return null;
     }
 
     /**
