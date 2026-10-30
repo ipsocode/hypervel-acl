@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Ipsocode\Acl\Tests\Feature;
 
+use Hypervel\Database\QueryException;
 use Hypervel\Permission\PermissionRegistrar;
 use Hypervel\Support\Facades\Cache;
 use Hypervel\Support\Facades\DB;
@@ -197,6 +198,25 @@ class TeamInheritanceTest extends TestCase
         $team->delete();
 
         $this->assertFalse(Cache::has(AccessSync::CHAIN_CACHE_KEY_PREFIX . $team->id));
+    }
+
+    public function testDeletingATeamOthersInheritLeavesItsMembersRoles(): void
+    {
+        $base = AclTeam::create(['name' => 'Base']);
+        AclTeam::create(['name' => 'Lead', 'inherit_id' => $base->id]);
+        $user = User::factory()->create();
+
+        $base->syncTeamRoles(['viewer']);
+        $base->addUser($user);
+
+        try {
+            $base->delete();
+            $this->fail('The delete should have been refused by the inherit key.');
+        } catch (QueryException) {
+            // The purge ran inside the transaction that the failed delete rolled back.
+        }
+
+        $this->assertSame(['viewer'], $this->rolesOf($user, $base));
     }
 
     public function testDependentsAreCachedAndFollowTeamsAddedMovedAndDeleted(): void
