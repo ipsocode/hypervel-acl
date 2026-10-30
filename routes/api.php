@@ -36,11 +36,8 @@ Route::get('teams/{team}/users', [TeamController::class, 'users'])->name('teams.
 Route::post('teams/{team}/users', [TeamController::class, 'addUser'])->name('teams.users.add')->middleware($gate('teams.users.add'));
 Route::delete('teams/{team}/users/{user}', [TeamController::class, 'removeUser'])->name('teams.users.remove')->middleware($gate('teams.users.remove'));
 
-if (Workspaces::enabled()) {
-    Route::get('reach', [WorkspaceController::class, 'reach'])->name('reach')->middleware($gate('reach'));
-}
-
 if (Workspaces::enabled() && Workspaces::model() !== null) {
+    Route::get('reach', [WorkspaceController::class, 'reach'])->name('reach')->middleware($gate('reach'));
     Route::get('workspaces', [WorkspaceController::class, 'index'])->name('workspaces.index')->middleware($gate('workspaces.index'));
     Route::post('workspaces', [WorkspaceController::class, 'store'])->name('workspaces.store')->middleware($gate('workspaces.store'));
     Route::get('workspaces/{aclWorkspace}', [WorkspaceController::class, 'show'])->name('workspaces.show')->middleware($gate('workspaces.show'));

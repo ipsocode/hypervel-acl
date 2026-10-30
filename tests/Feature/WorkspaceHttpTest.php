@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Ipsocode\Acl\Tests\Feature;
 
+use Hypervel\Database\QueryException;
+use Hypervel\Permission\Support\Config;
 use Hypervel\Support\Facades\DB;
 use Ipsocode\Acl\Models\AclTeam;
 use Ipsocode\Acl\Models\AclWorkspace;
 use Ipsocode\Acl\Tests\WorkspaceTestCase;
+use Ipsocode\Acl\Workspaces\Reach;
 use Workbench\App\Models\User;
 use Workbench\Database\Seeders\AclSeeder;
 
@@ -118,5 +121,146 @@ class WorkspaceHttpTest extends WorkspaceTestCase
         $ops->addUser($user, $this->north->id);
 
         $this->actingAs($user)->getJson('acl/workspaces')->assertOk()->assertJsonCount(2, 'data');
+    }
+
+    public function testAUserIsAddedInTheWorkspaceTheRequestActsInUnlessTheCallerCannotReachIt(): void
+    {
+        $ops = AclTeam::create(['name' => 'Ops']);
+        $user = User::factory()->create();
+
+        $this->withHeader('X-Workspace', (string) $this->north->id)->postJson("acl/teams/{$ops->id}/users", ['user_id' => $user->id])->assertCreated();
+        $this->assertSame($this->north->id, DB::table('acl_team_workspace_user')->where('user_id', $user->id)->value('workspace_id'));
+
+        $other = User::factory()->create();
+        $this->withHeader('X-Workspace', (string) $this->north->id)->postJson("acl/teams/{$ops->id}/users", ['user_id' => $other->id, 'workspace' => $this->elsewhere->id])->assertUnprocessable();
+        $this->withHeader('X-Workspace', (string) $this->north->id)->postJson("acl/teams/{$ops->id}/users", ['user_id' => $other->id, 'workspace' => 0])->assertUnprocessable();
+        $this->postJson("acl/teams/{$ops->id}/users", ['user_id' => $other->id, 'workspace' => 9999])->assertUnprocessable();
+        $this->assertSame(0, DB::table('acl_team_workspace_user')->where('user_id', $other->id)->count());
+    }
+
+    public function testOnlyTheHomeWorkspaceCreatesOrMovesAWorkspaceToTheTop(): void
+    {
+        $this->postJson('acl/workspaces', ['name' => 'Root'])->assertCreated();
+
+        $this->withHeader('X-Workspace', (string) $this->north->id)->postJson('acl/workspaces', ['name' => 'Root'])->assertUnprocessable();
+        $this->withHeader('X-Workspace', (string) $this->north->id)->postJson('acl/workspaces', ['name' => 'Root', 'parent_id' => null])->assertUnprocessable();
+        $this->withHeader('X-Workspace', (string) $this->north->id)->putJson("acl/workspaces/{$this->branch->id}", ['name' => 'Branch', 'parent_id' => null])->assertUnprocessable();
+        $this->withHeader('X-Workspace', (string) $this->north->id)->putJson("acl/workspaces/{$this->branch->id}", ['name' => 'Renamed'])->assertOk();
+        $this->assertSame($this->north->id, $this->branch->refresh()->parent_id);
+    }
+
+    public function testAWorkspaceThatDoesNotExistIsRefusedAndNotRemembered(): void
+    {
+        $this->withHeader('X-Workspace', '987654')->getJson('acl/teams')->assertForbidden();
+        $this->assertNull(cache()->get(Reach::CACHE_KEY_PREFIX . '987654'));
+
+        $reach = $this->app->make(Reach::class);
+
+        $this->assertSame([987654], $reach->ancestorsOf(987654));
+        $this->assertNull(cache()->get(Reach::CACHE_KEY_PREFIX . '987654'));
+        $this->assertSame([$this->north->id, $this->corporate->id], $reach->ancestorsOf($this->north->id));
+        $this->assertSame([$this->north->id, $this->corporate->id], cache()->get(Reach::CACHE_KEY_PREFIX . $this->north->id)['ancestors']);
+    }
+
+    public function testADeleteThatFailsKeepsTheWorkspacesRoles(): void
+    {
+        $roles = DB::table(Config::rolesTable())->where('workspace_id', $this->north->id)->count();
+        $this->assertGreaterThan(0, $roles);
+
+        try {
+            $this->north->delete();
+            $this->fail('The workspace has others beneath it.');
+        } catch (QueryException) {
+            $this->assertSame($roles, DB::table(Config::rolesTable())->where('workspace_id', $this->north->id)->count());
+        }
+    }
+
+    public function testAnOrgRoleBelowHomeRemovesAndListsOnlyWithinItsReach(): void
+    {
+        $ops = AclTeam::create(['name' => 'Ops']);
+        $south = AclWorkspace::create(['name' => 'South', 'parent_id' => $this->corporate->id]);
+        $inNorth = User::factory()->create();
+        $inSouth = User::factory()->create();
+        $ops->addUser($inNorth, $this->branch->id);
+        $ops->addUser($inSouth, $south->id);
+
+        $this->admins->addUser($user = User::factory()->create(), $this->north->id);
+        $this->admins->syncTeamRoles(['manager']);
+
+        $this->getJson("acl/teams/{$ops->id}/users")->assertOk()->assertJsonCount(2, 'data');
+
+        // The header stays on the test's requests from here on.
+        $north = $this->withHeader('X-Workspace', (string) $this->north->id);
+
+        $north->getJson("acl/teams/{$ops->id}/users")->assertOk()->assertJsonPath('data', [$inNorth->id]);
+
+        $north->deleteJson("acl/teams/{$ops->id}/users/{$inSouth->id}?workspace={$south->id}")->assertUnprocessable();
+        $north->deleteJson("acl/teams/{$ops->id}/users/{$inSouth->id}")->assertNoContent();
+        $this->assertSame(1, DB::table('acl_team_workspace_user')->where('user_id', $inSouth->id)->count());
+
+        $north->deleteJson("acl/teams/{$ops->id}/users/{$inNorth->id}")->assertNoContent();
+        $this->assertSame(0, DB::table('acl_team_workspace_user')->where('user_id', $inNorth->id)->count());
+    }
+
+    public function testAWorkspaceKeyMustBeOneKey(): void
+    {
+        $ops = AclTeam::create(['name' => 'Ops']);
+        $user = User::factory()->create();
+
+        $this->postJson("acl/teams/{$ops->id}/users", ['user_id' => $user->id, 'workspace' => [1]])->assertUnprocessable();
+        $this->postJson('acl/workspaces', ['name' => 'Odd', 'parent_id' => [$this->north->id]])->assertUnprocessable();
+    }
+
+    public function testAMoveThatRelatesTwoOrgRolesIsRefused(): void
+    {
+        $ops = AclTeam::create(['name' => 'Ops']);
+        $sales = AclTeam::create(['name' => 'Sales']);
+        $user = User::factory()->create();
+        $ops->addUser($user, $this->branch->id);
+        $sales->addUser($user, $this->elsewhere->id);
+
+        // Elsewhere would end up above Branch, where the user holds another org role.
+        $this->putJson("acl/workspaces/{$this->branch->id}", ['name' => 'Branch', 'parent_id' => $this->elsewhere->id])->assertUnprocessable();
+        $this->assertSame($this->north->id, $this->branch->refresh()->parent_id);
+
+        $sales->removeUser($user);
+        $this->putJson("acl/workspaces/{$this->branch->id}", ['name' => 'Branch', 'parent_id' => $this->elsewhere->id])->assertOk();
+    }
+
+    public function testACachedWorkspaceNeedsNoQuery(): void
+    {
+        $reach = $this->app->make(Reach::class);
+        $reach->exists($this->north->id);
+
+        DB::enableQueryLog();
+        $reach->exists($this->north->id);
+        $reach->ancestorsOf($this->north->id);
+
+        $this->assertSame([], array_filter(DB::getQueryLog(), fn (array $query): bool => str_contains($query['query'], 'acl_workspaces')));
+    }
+
+    public function testTheCachedTreeIsForgottenAgainWhenTheTransactionCommits(): void
+    {
+        $reach = $this->app->make(Reach::class);
+        $reach->ancestorsOf($this->branch->id);
+
+        DB::transaction(function (): void {
+            $this->branch->update(['parent_id' => $this->corporate->id]);
+
+            // A request in the meantime reads the old parent and caches it.
+            cache()->forever(Reach::CACHE_KEY_PREFIX . $this->branch->id, ['tenant' => null, 'ancestors' => [$this->branch->id, $this->north->id, $this->corporate->id]]);
+        });
+
+        $this->assertSame([$this->branch->id, $this->corporate->id], $reach->ancestorsOf($this->branch->id));
+    }
+
+    public function testTheHomeWorkspaceRemovesEveryOrgRoleOfATeamWhenNoneIsNamed(): void
+    {
+        $ops = AclTeam::create(['name' => 'Ops']);
+        $user = User::factory()->create();
+        $ops->addUser($user, $this->north->id);
+
+        $this->deleteJson("acl/teams/{$ops->id}/users/{$user->id}")->assertNoContent();
+        $this->assertSame(0, DB::table('acl_team_workspace_user')->where('user_id', $user->id)->count());
     }
 }

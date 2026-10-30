@@ -107,11 +107,11 @@ class Config
     }
 
     /**
-     * Get the column of the workspace model that holds the workspace it is beneath, or null for the default.
+     * Get the column of the workspace model that holds the workspace it is beneath.
      */
-    public static function workspaceParentColumn(): ?string
+    public static function workspaceParentColumn(): string
     {
-        return self::repository()->get('acl.column_names.workspace_parent');
+        return self::repository()->string('acl.column_names.workspace_parent');
     }
 
     /**

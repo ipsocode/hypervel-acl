@@ -188,26 +188,32 @@ trait IsTeam
     {
         $workspaces = Workspaces::enabled();
         $tenant = Teams::tenantColumn();
-        $members = DB::table(Teams::membersTable());
 
-        if ($workspaces) {
-            app('events')->dispatch(new OrgRoleAdding($this, $user, $workspace));
-        } elseif ((clone $members)
-            // The team's own tenant decides, whichever tenant the caller is acting in.
-            ->where(Teams::userPivotKey(), $user->getKey())
-            ->where(Teams::teamPivotKey(), '!=', $this->getKey())
-            ->when($tenant !== null, fn ($query) => $query->where($tenant, $this->tenant()))
-            ->exists()) {
-            throw new UserAlreadyInTeam('A user can be in only one team of a tenant.');
-        }
+        DB::transaction(function () use ($user, $workspace, $workspaces, $tenant): void {
+            // Two concurrent adds for one user would each pass the check below: the user's row serializes them.
+            $user->newQuery()->whereKey($user->getKey())->lockForUpdate()->value($user->getKeyName());
 
-        $members->insertOrIgnore([
-            Teams::teamPivotKey() => $this->getKey(),
-            Teams::userPivotKey() => $user->getKey(),
-            ...($workspaces ? [Workspaces::column() => $workspace] : []),
-            ...($tenant === null ? [] : [$tenant => $this->tenant()]),
-            'created_at' => Date::now()->format(Teams::DATE_FORMAT),
-        ]);
+            $members = DB::table(Teams::membersTable());
+
+            if ($workspaces) {
+                app('events')->dispatch(new OrgRoleAdding($this, $user, $workspace));
+            } elseif ((clone $members)
+                // The team's own tenant decides, whichever tenant the caller is acting in.
+                ->where(Teams::userPivotKey(), $user->getKey())
+                ->where(Teams::teamPivotKey(), '!=', $this->getKey())
+                ->when($tenant !== null, fn ($query) => $query->where($tenant, $this->tenant()))
+                ->exists()) {
+                throw new UserAlreadyInTeam('A user can be in only one team of a tenant.');
+            }
+
+            $members->insertOrIgnore([
+                Teams::teamPivotKey() => $this->getKey(),
+                Teams::userPivotKey() => $user->getKey(),
+                ...($workspaces ? [Workspaces::column() => $workspace] : []),
+                ...($tenant === null ? [] : [$tenant => $this->tenant()]),
+                'created_at' => Date::now()->format(Teams::DATE_FORMAT),
+            ]);
+        });
 
         Workspace::run($workspace, fn () => app(AccessSync::class)->refresh($user, $this));
     }
