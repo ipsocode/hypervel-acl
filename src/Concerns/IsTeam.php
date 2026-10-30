@@ -214,12 +214,15 @@ trait IsTeam
                 throw new UserAlreadyInTeam('A user can be in only one team of a tenant.');
             }
 
+            $now = Date::now()->format(Teams::DATE_FORMAT);
+
             $members->insertOrIgnore([
                 Teams::teamPivotKey() => $this->getKey(),
                 Teams::userPivotKey() => $user->getKey(),
                 ...($workspaces ? [Workspaces::column() => $workspace] : []),
                 ...($tenant === null ? [] : [$tenant => $this->tenant()]),
-                'created_at' => Date::now()->format(Teams::DATE_FORMAT),
+                'created_at' => $now,
+                'updated_at' => $now,
             ]);
         });
 

@@ -6,6 +6,7 @@ namespace Ipsocode\Acl\Tests\Feature;
 
 use Hypervel\Http\Request;
 use Hypervel\Permission\PermissionRegistrar;
+use Hypervel\Support\Facades\Date;
 use Hypervel\Support\Facades\DB;
 use Ipsocode\Acl\Access\AccessSync;
 use Ipsocode\Acl\Exceptions\UserAlreadyInTeam;
@@ -277,6 +278,25 @@ class TeamTest extends TestCase
         $request();
 
         $this->assertSame(['editor'], $this->rolesOf($user, $ops));
+    }
+
+    public function testReAddingAMemberMakesASyncRecordedBeforeStale(): void
+    {
+        $ops = AclTeam::create(['name' => 'Ops']);
+        $user = User::factory()->create();
+        $sync = $this->app->make(AccessSync::class);
+
+        $ops->addUser($user);
+        $ops->removeUser($user);
+        $synced = Date::now()->format(Teams::DATE_FORMAT);
+
+        $this->travel(1)->seconds();
+        $ops->addUser($user);
+
+        $changed = DB::table(Teams::ORGANIZATIONS_TABLE)->where(Teams::userPivotKey(), $user->getKey())->value('updated_at');
+
+        $this->assertNotNull($changed);
+        $this->assertTrue($sync->isStale($synced, $changed));
     }
 
     public function testEqualTimestampsCountAsStale(): void
