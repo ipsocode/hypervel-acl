@@ -196,4 +196,40 @@ class SetupTest extends TestCase
             $existed ? file_put_contents($path, $original) : @unlink($path);
         }
     }
+
+    public function testSetupAsksForTheKeyTypeAndKeepsItInTheEnvironmentFile(): void
+    {
+        $path = $this->app->environmentFilePath();
+        $original = is_file($path) ? file_get_contents($path) : null;
+        $before = glob(database_path('migrations/*'));
+
+        try {
+            // The permission tables are not migrated for this run.
+            config(['permission.table_names.permissions' => 'missing_table']);
+
+            $this->artisan('acl:setup')
+                ->expectsChoice('Which key type should the package\'s tables use? The user model\'s key must be the same type as the morph key of the permission tables', 'uuid', ['id', 'uuid', 'ulid'])
+                ->expectsConfirmation('Proceed with the migration creation?', 'no')
+                ->expectsOutputToContain('ACL_KEY_TYPE=uuid')
+                ->assertExitCode(0);
+            $this->assertStringContainsString("ACL_KEY_TYPE=uuid\n", file_get_contents($path));
+
+            // Asked again once the config is null again: the line is replaced, not repeated.
+            config(['acl.key_type' => null]);
+            $this->artisan('acl:setup')
+                ->expectsChoice('Which key type should the package\'s tables use? The user model\'s key must be the same type as the morph key of the permission tables', 'ulid', ['id', 'uuid', 'ulid'])
+                ->expectsConfirmation('Proceed with the migration creation?', 'no')
+                ->assertExitCode(0);
+            $this->assertSame(1, substr_count(file_get_contents($path), 'ACL_KEY_TYPE='));
+            $this->assertStringContainsString('ACL_KEY_TYPE=ulid', file_get_contents($path));
+
+            // A script, a set config and migrated tables are never asked.
+            config(['acl.key_type' => null]);
+            $this->artisan('acl:setup', ['--no-interaction' => true])->assertExitCode(0);
+            $this->artisan('acl:setup', ['--pretend' => true])->assertExitCode(0);
+        } finally {
+            $original === null ? @unlink($path) : file_put_contents($path, $original);
+            array_map('unlink', array_diff(glob(database_path('migrations/*')), $before));
+        }
+    }
 }

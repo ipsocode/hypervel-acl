@@ -7,11 +7,13 @@ namespace Ipsocode\Acl\Console;
 use Hypervel\Console\Command;
 use Hypervel\Permission\Support\Config as PermissionConfig;
 use Hypervel\Support\Facades\Date;
+use Hypervel\Support\Facades\File;
 use Hypervel\Support\Facades\Schema;
 use Ipsocode\Acl\Console\Concerns\ChecksPermissionPackage;
 use Ipsocode\Acl\Console\Concerns\FindsTeamMigrations;
 use Ipsocode\Acl\Support\Config;
 use Ipsocode\Acl\Support\Frontend;
+use Ipsocode\Acl\Support\KeyType;
 
 class SetupCommand extends Command
 {
@@ -41,6 +43,10 @@ class SetupCommand extends Command
             $this->error('The permission tables have no team columns: run permission:setup-teams and migrate first.');
 
             return self::FAILURE;
+        }
+
+        if (! $pretend) {
+            $this->chooseKeyType();
         }
 
         // The bundled UI's assets are refreshed on every run: a package update changes them.
@@ -115,6 +121,36 @@ class SetupCommand extends Command
         $this->line('');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Ask which key type the package's tables use, when nothing decides it yet, and keep the answer in .env.
+     *
+     * The permission tables decide it once they exist, and a script is never asked.
+     */
+    protected function chooseKeyType(): void
+    {
+        if (config('acl.key_type') !== null || KeyType::fromPermissionsTable() !== null || ! $this->input->isInteractive()) {
+            return;
+        }
+
+        /** @var string $type */
+        $type = $this->choice(
+            'Which key type should the package\'s tables use? The user model\'s key must be the same type as the morph key of the permission tables',
+            array_column(KeyType::cases(), 'value'),
+            KeyType::forMigration()->value,
+        );
+
+        $path = $this->hypervel->environmentFilePath();
+        $contents = File::exists($path) ? File::get($path) : '';
+
+        File::put($path, preg_match('/^ACL_KEY_TYPE=.*$/m', $contents) === 1
+            ? preg_replace('/^ACL_KEY_TYPE=.*$/m', "ACL_KEY_TYPE={$type}", $contents)
+            : $contents . ($contents === '' || str_ends_with($contents, "\n") ? '' : "\n") . "ACL_KEY_TYPE={$type}\n");
+
+        config(['acl.key_type' => $type]);
+
+        $this->info("ACL_KEY_TYPE={$type} was written to {$path}.");
     }
 
     /**

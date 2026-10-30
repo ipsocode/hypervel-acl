@@ -71,12 +71,14 @@ return [
     |
     | The key type of the package's tables: "id", "uuid" or "ulid". Leave it null
     | to copy the permission tables: the type of their id column when they exist,
-    | else the one the configured role model uses. The user model's key must be
-    | the type of the morph key columns of the permission tables.
+    | else the one the configured role model uses, else the user model's. The user
+    | model's key must be the type of the morph key columns of the permission
+    | tables. With the tables not migrated yet, "acl:setup" asks which type to use
+    | and writes it to ACL_KEY_TYPE in your .env file.
     |
     */
 
-    'key_type' => null,
+    'key_type' => env('ACL_KEY_TYPE') ?: null,
 
     /*
     |--------------------------------------------------------------------------
