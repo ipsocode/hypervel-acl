@@ -58,7 +58,6 @@ return [
         'workspace_parent' => 'parent_id',
         'teams_inherit_key' => 'inherit_id',
         'tenant_foreign_key' => null,
-        'team_foreign_key' => config('permission.column_names.team_foreign_key', 'acl_team_id'),
     ],
 
     // Partition the permission tables by workspace, with a Globals team per tenant.
@@ -70,13 +69,15 @@ return [
     | Key Type
     |--------------------------------------------------------------------------
     |
-    | The key type of the team table: "id", "uuid" or "ulid". Leave it null to
-    | copy the permission tables: the type of their id column when they exist,
-    | else the one the configured role model uses.
+    | The key type of the package's tables: "id", "uuid" or "ulid". Leave it null
+    | to copy the permission tables: the type of their id column when they exist,
+    | else the one the configured role model uses. The user model's key must be
+    | the type of the morph key columns of the permission tables.
     |
     */
 
-    'key_type' => 'id',
+    'key_type' => null,
+
     /*
     |--------------------------------------------------------------------------
     | Guards
@@ -87,20 +88,6 @@ return [
     */
 
     'guards' => ['web'],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Access Sync
-    |--------------------------------------------------------------------------
-    |
-    | When queued, member access is rebuilt by a queued job that runs in the
-    | workspace it was dispatched from.
-    |
-    */
-
-    'sync' => [
-        'queue' => (bool) env('ACL_SYNC_QUEUE', false),
-    ],
 
     /*
     |--------------------------------------------------------------------------

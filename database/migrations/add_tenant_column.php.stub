@@ -13,7 +13,8 @@ return new class extends Migration {
      *
      * With acl.tenant on, adds acl.column_names.tenant_foreign_key to the five permission tables
      * and the team table, wherever it is missing. The column is nullable, as existing rows have
-     * no tenant yet.
+     * no tenant yet. On the roles and permissions tables it also leads their unique key, so two
+     * tenants may hold a role or permission of the same name.
      */
     public function up(): void
     {
@@ -23,9 +24,17 @@ return new class extends Migration {
             return;
         }
 
+        $names = config()->array('permission.table_names');
+
         foreach ($this->tables() as $name) {
-            if (! Schema::hasColumn($name, $tenant)) {
-                Schema::table($name, static fn (Blueprint $table) => $table->string($tenant)->nullable());
+            if (Schema::hasColumn($name, $tenant)) {
+                continue;
+            }
+
+            Schema::table($name, static fn (Blueprint $table) => $table->string($tenant)->nullable());
+
+            if ($name === $names['roles'] || $name === $names['permissions']) {
+                $this->leadUniqueKeyWithTenant($name, $tenant);
             }
         }
     }
@@ -37,6 +46,23 @@ return new class extends Migration {
      */
     public function down(): void
     {
+    }
+
+    /**
+     * Recreate the unique key of a role or permission name with the tenant first.
+     */
+    protected function leadUniqueKeyWithTenant(string $name, string $tenant): void
+    {
+        foreach (Schema::getIndexes($name) as $index) {
+            if ($index['unique'] && ! $index['primary'] && in_array('name', $index['columns'], true) && in_array('guard_name', $index['columns'], true)) {
+                Schema::table($name, static function (Blueprint $table) use ($index, $tenant): void {
+                    $table->dropUnique($index['name']);
+                    $table->unique([$tenant, ...$index['columns']]);
+                });
+
+                return;
+            }
+        }
     }
 
     /**

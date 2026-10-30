@@ -7,6 +7,7 @@ namespace Ipsocode\Acl\Http\Requests;
 use Closure;
 use Hypervel\Foundation\Http\FormRequest;
 use Hypervel\Permission\PermissionRegistrar;
+use Ipsocode\Acl\Support\Config;
 use Ipsocode\Acl\Support\Teams;
 
 class TeamRequest extends FormRequest
@@ -27,11 +28,21 @@ class TeamRequest extends FormRequest
         $current = $this->route('team');
 
         $rules = [
-            'name' => ['required', 'string'],
+            'name' => ['required', 'string', function (string $attribute, mixed $value, Closure $fail) use ($column, $tenant, $current): void {
+                $taken = Teams::query()->withoutGlobalScope('acl_tenant')
+                    ->where('name', $value)
+                    ->when($column !== null, fn ($query) => $query->where($column, Teams::query()->find($tenant)?->tenant()))
+                    ->when($current !== null, fn ($query) => $query->whereKeyNot($current))
+                    ->exists();
+
+                if ($taken) {
+                    $fail('The name has already been taken.');
+                }
+            }],
             'meta' => ['sometimes', 'nullable', 'array'],
         ];
 
-        $rules['inherit_id'] = ['sometimes', 'nullable', function (string $attribute, mixed $value, Closure $fail) use ($column, $tenant, $current): void {
+        $rules[Config::teamsInheritKey()] = ['sometimes', 'nullable', function (string $attribute, mixed $value, Closure $fail) use ($column, $tenant, $current): void {
             $query = Teams::query()->whereKey($value);
             $own = Teams::query()->find($tenant);
 

@@ -57,6 +57,17 @@ class WorkspaceHttpTest extends WorkspaceTestCase
         $this->withHeader('X-Workspace', (string) $this->north->id)->getJson('acl/workspaces')->assertOk()->assertJsonCount(2, 'data');
     }
 
+    public function testAWorkspaceNameIsUniqueBeneathItsParent(): void
+    {
+        $sibling = AclWorkspace::create(['name' => 'Sibling', 'parent_id' => $this->corporate->id]);
+
+        $this->postJson('acl/workspaces', ['name' => 'North', 'parent_id' => $this->corporate->id])->assertUnprocessable()->assertJsonValidationErrors('name');
+        $this->postJson('acl/workspaces', ['name' => 'North', 'parent_id' => $this->north->id])->assertCreated();
+        $this->putJson("acl/workspaces/{$sibling->id}", ['name' => 'North'])->assertUnprocessable()->assertJsonValidationErrors('name');
+        $this->putJson("acl/workspaces/{$sibling->id}", ['name' => 'Sibling', 'parent_id' => $this->corporate->id])->assertOk();
+        $this->postJson('acl/workspaces', ['name' => 'Elsewhere', 'parent_id' => null])->assertCreated();
+    }
+
     public function testAWorkspaceIsShownWithItsAncestors(): void
     {
         $this->getJson("acl/workspaces/{$this->branch->id}")
