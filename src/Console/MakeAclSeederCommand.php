@@ -17,6 +17,9 @@ class MakeAclSeederCommand extends SeederMakeCommand
 
     protected string $description = 'Create a new ACL catalogue seeder class';
 
+    /**
+     * Handle the command once the permission package is active.
+     */
     public function handle(): bool|int
     {
         if (($problem = $this->permissionPackageProblem()) !== null) {

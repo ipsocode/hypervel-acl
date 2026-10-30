@@ -104,6 +104,9 @@ class AccessSync
         $this->cache->put($this->syncedCacheKey($user, $key), $synced, self::SYNCED_CACHE_TTL);
     }
 
+    /**
+     * Return the cache key of a user's last sync time for a membership.
+     */
     protected function syncedCacheKey(Model $user, string $key): string
     {
         return self::SYNCED_CACHE_KEY_PREFIX . $user->getMorphClass() . ':' . $user->getKey() . ':' . $key;
