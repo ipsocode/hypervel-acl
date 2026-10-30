@@ -33,12 +33,20 @@ php artisan acl:setup --pretend
 php artisan acl:setup --force
 ```
 
+When the permission config is not published, an interactive run also offers to publish it (`vendor:publish --tag=permission-config`). Set `permission.teams` to `true` in the published file and run the command again, since the config is read at boot. Under `--no-interaction` it only prints the message.
+
+`acl:status` prints the permission package state, which of teams, tenant and workspace are on, the team and workspace models, the guards, the users table, the key type of the package's tables, and whether each migration the setup generates is published or pending. It exits non-zero, with the reason printed, when the permission package is not active, `acl.tenant` is on without a tenant column, the users table is missing or its key type differs from the user model's, or `acl.key_type` differs from the permissions table's key type, so CI can use it:
+
+```sh
+php artisan acl:status
+```
+
 `acl:make-seeder` takes the seeder's name (`AclSeeder` by default) and `--force`, which replaces a seeder that already exists.
 
 If the permission tables already exist without team columns, set `permission.teams` to `true` and run the framework's `permission:setup-teams` first. Run `php artisan migrate` afterwards.
 
 ## UUID and ULID Keys
 
-The package's tables use the key type of the framework's permission tables, so an application whose roles and permissions use UUIDs or ULIDs needs no setup beyond [the framework's own](https://github.com/hypervel/components/blob/0.4/src/docs/permission.md#uuid-and-ulid-keys). `acl.key_type` is `null` by default: the `acl_teams`, `acl_organizations` and workspace migrations copy the type of the permissions table's `id` column when the table exists, and otherwise the type of the key the configured `permission.models.role` generates (`HasUuids` or `HasUlids`). Set it to `id`, `uuid` or `ulid` to choose the type yourself, before you run the migrations.
+The package's tables use the key type of the framework's permission tables, so an application whose roles and permissions use UUIDs or ULIDs needs no setup beyond [the framework's own](https://github.com/hypervel/components/blob/0.4/src/docs/permission.md#uuid-and-ulid-keys). `acl.key_type` is `null` by default: the `acl_teams`, `acl_organizations` and workspace migrations copy the type of the permissions table's `id` column when the table exists, and otherwise the type of the key the configured `permission.models.role` generates (`HasUuids` or `HasUlids`), or, when that model names none, the type the first `acl.guards` guard's user model generates. The package's `Role` and `Permission` models, which cannot afford a table lookup on every instance, use the same fallback without the table. Set it to `id`, `uuid` or `ulid` to choose the type yourself, before you run the migrations. When `acl.key_type` is `null` and the permission tables are not migrated yet, an interactive `acl:setup` asks which type to use and sets the answer as `key_type` in your `config/acl.php` (publishing it first if needed); it never asks under `--no-interaction` or `--pretend`. The package's `Role` and `Permission` models follow `acl.key_type` too, so with it set they generate UUIDs or ULIDs; add `HasUuids` or `HasUlids` to your own models instead if you leave it `null`.
 
 Every model that receives assignments must use the same key type as the morph key columns of the permission tables (`permission.column_names.model_morph_key`). The `acl_organizations` table takes its user key from the user model of the first guard in `acl.guards`, so mixing integer and UUID users in one table breaks lookups on PostgreSQL, MySQL and MariaDB. A team model of your own keeps its own key type, and the setup command's migrations match it.

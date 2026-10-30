@@ -22,9 +22,7 @@ class MakeAclSeederCommand extends SeederMakeCommand
      */
     public function handle(): bool|int
     {
-        if (($problem = $this->permissionPackageProblem()) !== null) {
-            $this->error($problem);
-
+        if (! $this->ensurePermissionPackage()) {
             return self::FAILURE;
         }
 

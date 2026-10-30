@@ -10,15 +10,17 @@ use Hypervel\Support\Facades\Date;
 use Hypervel\Support\Facades\File;
 use Hypervel\Support\Facades\Schema;
 use Ipsocode\Acl\Console\Concerns\ChecksPermissionPackage;
+use Ipsocode\Acl\Console\Concerns\FindsTeamMigrations;
 use Ipsocode\Acl\Support\Config;
 use Ipsocode\Acl\Support\Frontend;
-use Ipsocode\Acl\Support\Teams;
-use Ipsocode\Acl\Support\Workspaces;
-use SplFileInfo;
+use Ipsocode\Acl\Support\KeyType;
+
+use function Hypervel\Prompts\select;
 
 class SetupCommand extends Command
 {
     use ChecksPermissionPackage;
+    use FindsTeamMigrations;
 
     protected ?string $signature = 'acl:setup {--force : Overwrite the migrations already generated} {--pretend : List the migrations without writing them}';
 
@@ -29,9 +31,7 @@ class SetupCommand extends Command
      */
     public function handle(): int
     {
-        if (($problem = $this->permissionPackageProblem(migrated: false)) !== null) {
-            $this->error($problem);
-
+        if (! $this->ensurePermissionPackage(migrated: false)) {
             return self::FAILURE;
         }
 
@@ -45,6 +45,10 @@ class SetupCommand extends Command
             $this->error('The permission tables have no team columns: run permission:setup-teams and migrate first.');
 
             return self::FAILURE;
+        }
+
+        if (! $pretend) {
+            $this->chooseKeyType();
         }
 
         // The bundled UI's assets are refreshed on every run: a package update changes them.
@@ -122,46 +126,40 @@ class SetupCommand extends Command
     }
 
     /**
-     * Get the stubs to copy: the inheritance column for the application's own team table, and,
-     * with acl.tenant on, the tenant column for the permission, team and org role tables and the unique keys it leads, and, with
-     * acl.workspace on, the partition column for the permission tables and, for the application's
-     * own workspace model, its parent column.
+     * Ask which key type the package's tables use, when nothing decides it yet, and set it in the application's acl config.
      *
-     * The package's team and workspace tables are migrations the package loads itself.
-     *
-     * @return list<string>
+     * The permission tables decide it once they exist, and a script is never asked.
      */
-    protected function teamStubs(): array
+    protected function chooseKeyType(): void
     {
-        return [
-            ...(Teams::usesPackageModel() ? [] : ['add_team_inheritance']),
-            ...(Teams::tenantColumn() !== null ? ['add_tenant_column', 'lead_tenant_unique_keys'] : []),
-            ...(Workspaces::enabled() ? ['add_workspace_column'] : []),
-            ...(Workspaces::enabled() && Workspaces::model() !== null && ! Workspaces::usesPackageModel() ? ['add_workspace_parent'] : []),
-        ];
-    }
+        if (config('acl.key_type') !== null || KeyType::fromPermissionsTable() !== null || ! $this->input->isInteractive()) {
+            return;
+        }
 
-    /**
-     * Get the names of the migrations already generated for a stub.
-     *
-     * @return array<int, string>
-     */
-    protected function alreadyExistingMigrations(string $stub): array
-    {
-        return collect($this->migrationNames())
-            ->filter(fn (string $name) => preg_match('/^\d{4}_\d{2}_\d{2}_\d{6}_' . $stub . '\.php$/', $name) === 1)
-            ->values()
-            ->all();
-    }
+        $type = select(
+            label: 'Which key type should the package\'s tables use?',
+            options: array_column(KeyType::cases(), 'value'),
+            default: KeyType::forMigration()->value,
+            hint: 'The user model\'s key must be the same type as the morph key of the permission tables.',
+        );
 
-    /**
-     * Get the file names in the application's migrations directory.
-     *
-     * @return array<int, string>
-     */
-    protected function migrationNames(): array
-    {
-        return array_map(fn (SplFileInfo $file) => $file->getFilename(), File::files(database_path('migrations')));
+        if (! File::exists(config_path('acl.php'))) {
+            $this->call('vendor:publish', ['--tag' => 'acl-config']);
+        }
+
+        $contents = File::get(config_path('acl.php'));
+
+        if (preg_match("/'key_type' => null,/", $contents) !== 1) {
+            $this->warn("Set 'key_type' => '{$type}' in config/acl.php: it is not null there, so it was left as it is.");
+
+            return;
+        }
+
+        File::put(config_path('acl.php'), str_replace("'key_type' => null,", "'key_type' => '{$type}',", $contents));
+
+        config(['acl.key_type' => $type]);
+
+        $this->info("'key_type' was set to '{$type}' in config/acl.php.");
     }
 
     /**

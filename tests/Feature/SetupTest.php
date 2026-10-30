@@ -112,7 +112,7 @@ class SetupTest extends TestCase
         $this->artisan('acl:setup')->expectsOutputToContain('set permission.teams to true, then run php artisan permission:setup-teams')->assertExitCode(1);
 
         config(['permission.teams' => true, 'permission.table_names.roles' => null]);
-        $this->artisan('acl:setup')->expectsOutputToContain('--tag=permission-config')->assertExitCode(1);
+        $this->artisan('acl:setup', ['--no-interaction' => true])->expectsOutputToContain('--tag=permission-config')->assertExitCode(1);
 
         config(['permission.table_names.roles' => 'roles']);
         (function (): void {
@@ -170,6 +170,66 @@ class SetupTest extends TestCase
 
             $this->assertCount(1, array_diff(glob(database_path('migrations/*')), $before));
         } finally {
+            array_map('unlink', array_diff(glob(database_path('migrations/*')), $before));
+        }
+    }
+
+    public function testSetupOffersToPublishTheUnpublishedPermissionConfig(): void
+    {
+        config(['permission.table_names.roles' => null]);
+        $path = config_path('permission.php');
+        $existed = file_exists($path);
+        $original = $existed ? file_get_contents($path) : null;
+
+        try {
+            $this->artisan('acl:setup')
+                ->expectsConfirmation('Publish the permission config now?', 'no')
+                ->assertExitCode(1);
+
+            $this->artisan('acl:setup', ['--force' => true, '--no-interaction' => true])->assertExitCode(1);
+
+            $this->artisan('acl:setup')
+                ->expectsConfirmation('Publish the permission config now?', 'yes')
+                ->expectsOutputToContain('run this command again')
+                ->assertExitCode(1);
+            $this->assertFileExists($path);
+        } finally {
+            $existed ? file_put_contents($path, $original) : @unlink($path);
+        }
+    }
+
+    public function testSetupAsksForTheKeyTypeAndSetsItInTheAclConfig(): void
+    {
+        $path = config_path('acl.php');
+        $original = is_file($path) ? file_get_contents($path) : null;
+        $before = glob(database_path('migrations/*'));
+
+        try {
+            // The permission tables are not migrated for this run.
+            config(['permission.table_names.permissions' => 'missing_table']);
+
+            $this->artisan('acl:setup')
+                ->expectsChoice('Which key type should the package\'s tables use?', 'uuid', ['id', 'uuid', 'ulid'])
+                ->expectsConfirmation('Proceed with the migration creation?', 'no')
+                ->expectsOutputToContain("'key_type' was set to 'uuid'")
+                ->assertExitCode(0);
+            $this->assertStringContainsString("'key_type' => 'uuid',", file_get_contents($path));
+            $this->assertSame('uuid', config('acl.key_type'));
+
+            // A key type already written to the file is left alone and the user told.
+            config(['acl.key_type' => null]);
+            $this->artisan('acl:setup')
+                ->expectsChoice('Which key type should the package\'s tables use?', 'ulid', ['id', 'uuid', 'ulid'])
+                ->expectsConfirmation('Proceed with the migration creation?', 'no')
+                ->expectsOutputToContain("Set 'key_type' => 'ulid'")
+                ->assertExitCode(0);
+            $this->assertStringContainsString("'key_type' => 'uuid',", file_get_contents($path));
+
+            // A script, a set config and migrated tables are never asked.
+            $this->artisan('acl:setup', ['--no-interaction' => true])->assertExitCode(0);
+            $this->artisan('acl:setup', ['--pretend' => true])->assertExitCode(0);
+        } finally {
+            $original === null ? @unlink($path) : file_put_contents($path, $original);
             array_map('unlink', array_diff(glob(database_path('migrations/*')), $before));
         }
     }
