@@ -9,6 +9,7 @@ use Hypervel\Permission\Support\Config as PermissionConfig;
 use Hypervel\Support\Facades\Date;
 use Hypervel\Support\Facades\File;
 use Hypervel\Support\Facades\Schema;
+use Ipsocode\Acl\Console\Concerns\ChecksPermissionPackage;
 use Ipsocode\Acl\Support\Config;
 use Ipsocode\Acl\Support\Frontend;
 use Ipsocode\Acl\Support\Teams;
@@ -17,7 +18,9 @@ use SplFileInfo;
 
 class SetupCommand extends Command
 {
-    protected ?string $signature = 'acl:setup';
+    use ChecksPermissionPackage;
+
+    protected ?string $signature = 'acl:setup {--force : Overwrite the migrations already generated} {--pretend : List the migrations without writing them}';
 
     protected string $description = 'Generate the migrations the permission tables and teams need, and publish the bundled UI assets';
 
@@ -26,6 +29,15 @@ class SetupCommand extends Command
      */
     public function handle(): int
     {
+        if (($problem = $this->permissionPackageProblem()) !== null) {
+            $this->error($problem);
+
+            return self::FAILURE;
+        }
+
+        $force = $this->option('force');
+        $pretend = $this->option('pretend');
+
         $teamKey = PermissionConfig::teamForeignKey();
         $roles = config('permission.table_names.roles');
 
@@ -36,7 +48,7 @@ class SetupCommand extends Command
         }
 
         // The bundled UI's assets are refreshed on every run: a package update changes them.
-        if (Config::uiEnabled() && Config::uiFrontend() === Frontend::Bundled) {
+        if (! $pretend && Config::uiEnabled() && Config::uiFrontend() === Frontend::Bundled) {
             $this->call('vendor:publish', ['--tag' => 'acl-assets', '--force' => true]);
         }
 
@@ -49,19 +61,32 @@ class SetupCommand extends Command
         $this->line('');
         $this->info('The ACL setup is going to add the migrations the permission tables need');
 
-        if ($existing) {
+        if ($existing && ! $force) {
             $this->line('');
 
             $this->warn("These migrations already exist and are skipped:\n - " . implode("\n - ", $existing));
         }
 
-        if ($pending === [] && ! $publish) {
+        $overwrite = $force ? $existing : [];
+
+        if ($pending === [] && $overwrite === [] && ! $publish) {
             return self::SUCCESS;
         }
 
         $this->line('');
 
-        if (! $this->confirm('Proceed with the migration creation?', true)) {
+        if ($pretend) {
+            $this->info('These migrations would be written:');
+
+            foreach ([...($publish ? ['create_permission_tables'] : []), ...$pending, ...$overwrite] as $stub) {
+                $this->line(' - ' . $stub . (in_array($stub, $overwrite, true) ? ' (overwritten)' : ''));
+            }
+
+            return self::SUCCESS;
+        }
+
+        // A script passes --force or --no-interaction and is never asked.
+        if (! $force && $this->input->isInteractive() && ! $this->confirm('Proceed with the migration creation?', true)) {
             return self::SUCCESS;
         }
 
@@ -81,6 +106,12 @@ class SetupCommand extends Command
             $time = $time->addSecond();
 
             copy(__DIR__ . "/../../database/migrations/{$stub}.php.stub", $this->getMigrationPath($stub, $time->format('Y_m_d_His')));
+        }
+
+        foreach ($overwrite as $stub) {
+            foreach ($this->alreadyExistingMigrations($stub) as $name) {
+                copy(__DIR__ . "/../../database/migrations/{$stub}.php.stub", database_path("migrations/{$name}"));
+            }
         }
 
         $this->info('Migrations created successfully.');

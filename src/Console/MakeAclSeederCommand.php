@@ -5,14 +5,28 @@ declare(strict_types=1);
 namespace Ipsocode\Acl\Console;
 
 use Hypervel\Database\Console\Seeds\SeederMakeCommand;
+use Ipsocode\Acl\Console\Concerns\ChecksPermissionPackage;
 use Symfony\Component\Console\Attribute\AsCommand;
 
 #[AsCommand(name: 'acl:make-seeder')]
 class MakeAclSeederCommand extends SeederMakeCommand
 {
-    protected ?string $signature = 'acl:make-seeder {name=AclSeeder : The name of the seeder}';
+    use ChecksPermissionPackage;
+
+    protected ?string $signature = 'acl:make-seeder {name=AclSeeder : The name of the seeder} {--force : Create the seeder even if it already exists}';
 
     protected string $description = 'Create a new ACL catalogue seeder class';
+
+    public function handle(): bool|int
+    {
+        if (($problem = $this->permissionPackageProblem()) !== null) {
+            $this->error($problem);
+
+            return self::FAILURE;
+        }
+
+        return parent::handle();
+    }
 
     protected function getStub(): string
     {

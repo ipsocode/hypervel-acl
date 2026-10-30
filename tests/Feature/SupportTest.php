@@ -39,6 +39,29 @@ class SupportTest extends TestCase
         }
     }
 
+    public function testMakeAclSeederHonorsForceAndChecksThePermissionPackage(): void
+    {
+        $path = database_path('seeders/TmpForceSeeder.php');
+
+        try {
+            $this->artisan('acl:make-seeder', ['name' => 'TmpForceSeeder'])->assertExitCode(0);
+            file_put_contents($path, 'edited');
+
+            $this->artisan('acl:make-seeder', ['name' => 'TmpForceSeeder'])->assertExitCode(0);
+            $this->assertSame('edited', file_get_contents($path));
+
+            $this->artisan('acl:make-seeder', ['name' => 'TmpForceSeeder', '--force' => true])->assertExitCode(0);
+            $this->assertStringContainsString('extends BaseAclSeeder', file_get_contents($path));
+
+            config(['permission.teams' => false]);
+            file_put_contents($path, 'edited');
+            $this->artisan('acl:make-seeder', ['name' => 'TmpForceSeeder', '--force' => true])->expectsOutputToContain('permission:setup-teams')->assertExitCode(1);
+            $this->assertSame('edited', file_get_contents($path));
+        } finally {
+            @unlink($path);
+        }
+    }
+
     public function testBootNeedsTeamsButNotATeamModel(): void
     {
         config(['permission.models.team' => null, 'acl.models.team' => null]);
