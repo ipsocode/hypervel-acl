@@ -7,6 +7,7 @@ namespace Ipsocode\Acl\Console\Concerns;
 use Hypervel\Permission\PermissionServiceProvider;
 use Hypervel\Support\Facades\File;
 use Hypervel\Support\Facades\Schema;
+use SplFileInfo;
 
 trait ChecksPermissionPackage
 {
@@ -15,8 +16,8 @@ trait ChecksPermissionPackage
      *
      * An interactive run offers to take the missing step: publish the permission config, turn on
      * its teams, or run acl:setup for the permission migrations. The application's config is read
-     * at boot, so the command is run again afterwards. A run under --no-interaction or --pretend
-     * is never asked.
+     * at boot, so the command is run again once a step has changed it. A run under --no-interaction
+     * or --pretend is never asked.
      */
     protected function ensurePermissionPackage(bool $migrated = true): bool
     {
@@ -75,44 +76,78 @@ trait ChecksPermissionPackage
         $config = $this->hypervel->get('config');
 
         if (! is_string($config->get('permission.table_names.roles')) || ! $config->boolean('permission.teams')) {
+            $published = false;
+
             if (! File::exists(config_path('permission.php'))) {
                 if (! $this->confirm('Publish the permission config now?', true)) {
                     return;
                 }
 
                 $this->call('vendor:publish', ['--tag' => 'permission-config']);
+
+                $published = true;
             }
+
+            $changed = $published;
 
             if (! $config->boolean('permission.teams') && $this->confirm('Turn on teams in config/permission.php?', true)) {
-                $this->turnOnPermissionTeams();
+                $changed = $this->turnOnPermissionTeams() || $changed;
             }
 
-            $this->info('The config is read at boot: run this command again.');
+            if ($changed) {
+                $this->info('The config is read at boot: run this command again.');
+            }
 
             return;
         }
 
-        if ($this->confirm('Run acl:setup now to publish the permission migrations?', true)) {
-            $this->call('acl:setup');
+        if ($this->permissionMigrationPublished()) {
+            $this->info('The permission migration is published: run php artisan migrate, then run this command again.');
+
+            return;
+        }
+
+        if ($this->confirm('Run acl:setup now to publish the permission migrations?', true) && $this->publishPermissionMigration()) {
             $this->info('Run php artisan migrate, then run this command again.');
         }
     }
 
     /**
-     * Set teams to true in the application's permission config, or tell the user to when it is not false there.
+     * Run acl:setup and determine if it published the permission tables' migration.
      */
-    protected function turnOnPermissionTeams(): void
+    protected function publishPermissionMigration(): bool
+    {
+        return $this->call('acl:setup') === self::SUCCESS && $this->permissionMigrationPublished();
+    }
+
+    /**
+     * Determine if the permission tables' migration is in the application's migrations directory.
+     */
+    protected function permissionMigrationPublished(): bool
+    {
+        return collect(File::files(database_path('migrations')))
+            ->contains(fn (SplFileInfo $file) => str_ends_with($file->getFilename(), '_create_permission_tables.php'));
+    }
+
+    /**
+     * Set teams to true in the application's permission config, or tell the user to when it is not false there exactly once.
+     *
+     * Return whether the file was changed.
+     */
+    protected function turnOnPermissionTeams(): bool
     {
         $contents = File::get(config_path('permission.php'));
 
-        if (preg_match("/'teams' => false,/", $contents) !== 1) {
-            $this->warn("Set 'teams' => true in config/permission.php: it is not false there, so it was left as it is.");
+        if (preg_match_all("/'teams' => false,/", $contents) !== 1) {
+            $this->warn("Set 'teams' => true in config/permission.php: it is not false there exactly once, so it was left as it is.");
 
-            return;
+            return false;
         }
 
         File::put(config_path('permission.php'), str_replace("'teams' => false,", "'teams' => true,", $contents));
 
         $this->info("'teams' was set to true in config/permission.php.");
+
+        return true;
     }
 }

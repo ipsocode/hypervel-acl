@@ -81,12 +81,14 @@ class StatusTest extends TestCase
             ->expectsOutputToContain('Permission package')
             ->expectsOutputToContain('add_tenant_column')
             ->doesntExpectOutputToContain('add_workspace_column')
+            ->doesntExpectOutputToContain('add_team_index')
             ->doesntExpectOutputToContain('Guards')
             ->assertExitCode(0);
 
         $this->artisan('acl:status', ['--only' => ['workspace']])
             ->expectsOutputToContain('Workspace model')
             ->expectsOutputToContain('add_workspace_column')
+            ->expectsOutputToContain('add_team_index')
             ->doesntExpectOutputToContain('add_tenant_column')
             ->assertExitCode(0);
 
