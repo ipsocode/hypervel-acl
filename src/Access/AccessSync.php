@@ -28,6 +28,8 @@ class AccessSync
 
     public const DEPENDENTS_CACHE_KEY_PREFIX = 'acl:team-dependents:';
 
+    public const SYNCED_CACHE_KEY_PREFIX = 'acl:synced:';
+
     public function __construct(protected PermissionRegistrar $registrar, protected CacheRepository $cache)
     {
     }
@@ -40,9 +42,41 @@ class AccessSync
      */
     public function rebuildMember(Model $user, Team $team, bool $remove = false, int|string|null $workspace = null): void
     {
-        $this->asTeam($team, function () use ($user, $team, $remove): void {
+        // One transaction, so a concurrent request never sees the roles between the detach and the attach.
+        $this->asTeam($team, fn () => $user->getConnection()->transaction(function () use ($user, $team, $remove): void {
             $user->syncRoles($remove ? [] : $this->rolesFor($team)); // @phpstan-ignore method.notFound (the user uses HasRoles)
-        }, $workspace ?? Workspace::id());
+        }), $workspace ?? Workspace::id());
+    }
+
+    /**
+     * Get when a user was last synced to a team in a workspace, for a request that has no session to keep the time in.
+     *
+     * @param Model&Team $team
+     */
+    public function syncedAt(Model $user, Team $team, int|string $workspace): ?string
+    {
+        /** @var null|string $synced */
+        $synced = $this->cache->get($this->syncedKey($user, $team, $workspace));
+
+        return $synced;
+    }
+
+    /**
+     * Remember when a user was synced to a team in a workspace.
+     *
+     * @param Model&Team $team
+     */
+    public function rememberSynced(Model $user, Team $team, int|string $workspace, string $synced): void
+    {
+        $this->cache->forever($this->syncedKey($user, $team, $workspace), $synced);
+    }
+
+    /**
+     * @param Model&Team $team
+     */
+    protected function syncedKey(Model $user, Team $team, int|string $workspace): string
+    {
+        return self::SYNCED_CACHE_KEY_PREFIX . $user->getMorphClass() . ':' . $user->getKey() . ':' . $team->getKey() . ':' . $workspace;
     }
 
     /**

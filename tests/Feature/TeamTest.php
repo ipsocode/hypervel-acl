@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Ipsocode\Acl\Tests\Feature;
 
+use Hypervel\Http\Request;
 use Hypervel\Permission\PermissionRegistrar;
 use Hypervel\Support\Facades\DB;
 use Ipsocode\Acl\Access\AccessSync;
@@ -12,6 +13,7 @@ use Ipsocode\Acl\Http\Middleware\ResolveAcl;
 use Ipsocode\Acl\Models\AclTeam;
 use Ipsocode\Acl\Support\Teams;
 use Ipsocode\Acl\Tests\TestCase;
+use Symfony\Component\HttpFoundation\Response;
 use Workbench\App\Models\User;
 use Workbench\Database\Seeders\AclSeeder;
 
@@ -194,6 +196,32 @@ class TeamTest extends TestCase
         $this->assertSame(['editor'], $this->rolesOf($user, $ops));
     }
 
+    public function testARequestWithoutASessionRebuildsOnlyWhenTheMembershipChanged(): void
+    {
+        $ops = $this->team('Ops', ['viewer']);
+        $user = User::factory()->create();
+        $ops->addUser($user);
+
+        $this->tokenRequest($user);
+        $this->assertSame(['viewer'], $this->rolesOf($user, $ops));
+
+        $writes = [];
+        DB::listen(function ($query) use (&$writes): void {
+            if (preg_match('/^(delete|insert)\b.*model_has_roles/i', $query->sql) === 1) {
+                $writes[] = $query->sql;
+            }
+        });
+
+        $this->tokenRequest($user);
+        $this->assertSame([], $writes);
+
+        $this->travel(1)->seconds();
+        $ops->syncTeamRoles(['editor']);
+        $this->tokenRequest($user);
+
+        $this->assertSame(['editor'], $this->rolesOf($user, $ops));
+    }
+
     public function testEqualTimestampsCountAsStale(): void
     {
         $sync = $this->app->make(AccessSync::class);
@@ -230,5 +258,13 @@ class TeamTest extends TestCase
         $sales->delete();
 
         $this->assertSame(0, DB::table(Teams::ORGANIZATIONS_TABLE)->count());
+    }
+
+    protected function tokenRequest(User $user): void
+    {
+        $request = Request::create('/');
+        $request->setUserResolver(fn () => $user);
+
+        $this->app->make(ResolveAcl::class)->handle($request, fn (): Response => new Response);
     }
 }

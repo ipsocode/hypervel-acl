@@ -45,7 +45,7 @@ class ResolveAcl
      * workspaces on, they act in the workspace the request names, else the one of their only org
      * role, else the home workspace, as the team of the org role held there or above it; with none,
      * the request is refused. When the org role changed after the time the session was synced at,
-     * the user's roles are rebuilt; a request without a session rebuilds them every time. This does
+     * the user's roles are rebuilt; a request without a session compares with the time kept in the cache. This does
      * not authorize anything.
      */
     public function handle(Request $request, Closure $next): Response
@@ -85,12 +85,18 @@ class ResolveAcl
             $times = is_array($synced) && is_array($synced['at'] ?? null) ? $synced['at'] : [];
             $key = $membership->team . ':' . $workspace;
 
-            if ($this->sync->isStale($times[$key] ?? null, $membership->changed)) {
-                /** @var Model&Team $team */
-                $team = Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($membership->team)->firstOrFail();
+            /** @var Model&Team $team */
+            $team = Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($membership->team)->firstOrFail();
+
+            // Without a session, the time the user was last synced is kept in the cache.
+            $last = $times[$key] ?? ($session === null ? $this->sync->syncedAt($user, $team, $workspace) : null);
+
+            if ($this->sync->isStale($last, $membership->changed)) {
                 $times[$key] = $this->sync->refresh($user, $team);
 
-                $session?->put(self::SESSION_KEY, ['team' => $membership->team, 'at' => $times]);
+                $session === null
+                    ? $this->sync->rememberSynced($user, $team, $workspace, $times[$key])
+                    : $session->put(self::SESSION_KEY, ['team' => $membership->team, 'at' => $times]);
             }
         }
 
