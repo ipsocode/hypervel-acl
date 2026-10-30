@@ -82,6 +82,22 @@ class WorkspaceStubTest extends TestCase
         $this->assertSame(['workspace_id', $team, 'role_id', 'model_id', 'model_type'], $this->primaryOf('model_has_roles'));
     }
 
+    public function testTheStubsRunTogetherInEitherOrder(): void
+    {
+        config(['acl.workspace' => true, 'acl.tenant' => true, 'acl.column_names.workspace_foreign_key' => 'workspace_id', 'acl.column_names.tenant_foreign_key' => 'tenant']);
+
+        $team = config('permission.column_names.team_foreign_key');
+        $tenant = require __DIR__ . '/../../database/migrations/add_tenant_column.php.stub';
+
+        $tenant->up();
+        $this->stub()->up();
+
+        $this->assertTrue($this->hasIndex('permissions', ['workspace_id', 'tenant', 'name', 'guard_name'], unique: true));
+        $this->assertTrue($this->hasIndex('roles', ['workspace_id', 'tenant', $team, 'name', 'guard_name'], unique: true));
+        $this->assertFalse($this->hasIndex('permissions', ['tenant', 'name', 'guard_name']));
+        $this->assertFalse($this->hasIndex('roles', ['tenant', $team, 'name', 'guard_name']));
+    }
+
     public function testTheStubKeepsExistingRowsInTheHomeWorkspace(): void
     {
         config(['acl.workspace' => true, 'acl.column_names.workspace_foreign_key' => 'workspace_id']);
