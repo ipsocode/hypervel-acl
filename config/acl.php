@@ -58,7 +58,6 @@ return [
         'workspace_parent' => 'parent_id',
         'teams_inherit_key' => 'inherit_id',
         'tenant_foreign_key' => null,
-        'team_foreign_key' => config('permission.column_names.team_foreign_key', 'acl_team_id'),
     ],
 
     // Partition the permission tables by workspace, with a Globals team per tenant.
@@ -89,20 +88,6 @@ return [
     */
 
     'guards' => ['web'],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Access Sync
-    |--------------------------------------------------------------------------
-    |
-    | When queued, member access is rebuilt by a queued job that runs in the
-    | workspace it was dispatched from.
-    |
-    */
-
-    'sync' => [
-        'queue' => (bool) env('ACL_SYNC_QUEUE', false),
-    ],
 
     /*
     |--------------------------------------------------------------------------

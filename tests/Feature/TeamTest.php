@@ -234,7 +234,7 @@ class TeamTest extends TestCase
         $this->nextRequest($user);
         $synced = session(ResolveAcl::SESSION_KEY);
 
-        $this->assertSame((string) $ops->id, (string) $synced['team']);
+        $this->assertSame(["{$ops->id}:0"], array_keys($synced['at']));
 
         $this->nextRequest($user);
         $this->assertSame($synced, session(ResolveAcl::SESSION_KEY));

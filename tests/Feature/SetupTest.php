@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Ipsocode\Acl\Tests\Feature;
 
+use Hypervel\Permission\PermissionRegistrar;
 use Ipsocode\Acl\Tests\TestCase;
 
 class SetupTest extends TestCase
@@ -98,7 +99,7 @@ class SetupTest extends TestCase
 
     public function testSetupAsksForTeamColumnsOnExistingPermissionTables(): void
     {
-        config(['permission.column_names.team_foreign_key' => 'missing_team_id']);
+        $this->app->make(PermissionRegistrar::class)->teamsKey = 'missing_team_id';
 
         $this->artisan('acl:setup')->expectsOutputToContain('permission:setup-teams')->assertExitCode(1);
     }
