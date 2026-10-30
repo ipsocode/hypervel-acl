@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace Ipsocode\Acl\Tests\Feature;
 
+use Hypervel\Database\Schema\Blueprint;
 use Hypervel\Http\Request;
 use Hypervel\Support\Facades\DB;
 use Hypervel\Support\Facades\Schema;
 use Ipsocode\Acl\Http\Middleware\ResolveAcl;
 use Ipsocode\Acl\Models\AclTeam;
+use Ipsocode\Acl\Models\AclWorkspace;
 use Ipsocode\Acl\Support\Teams;
+use Ipsocode\Acl\Support\Workspaces;
+use Ipsocode\Acl\Tests\Fixtures\UuidRole;
 use Ipsocode\Acl\Tests\TestCase;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Response;
@@ -20,6 +24,20 @@ class WorkspaceStubTest extends TestCase
     protected function stub(): object
     {
         return require __DIR__ . '/../../database/migrations/add_workspace_column.php.stub';
+    }
+
+    /**
+     * Get the type name the database reports for a column.
+     */
+    protected function columnTypeName(string $table, string $column): string
+    {
+        foreach (Schema::getColumns($table) as $definition) {
+            if ($definition['name'] === $column) {
+                return $definition['type_name'];
+            }
+        }
+
+        $this->fail("No column {$column}.");
     }
 
     /**
@@ -96,7 +114,9 @@ class WorkspaceStubTest extends TestCase
         $team = config('permission.column_names.team_foreign_key');
         $tenant = require __DIR__ . '/../../database/migrations/add_tenant_column.php.stub';
 
+        // The order acl:setup generates them in: the tenant column, the keys it leads, then the workspace.
         $tenant->up();
+        (require __DIR__ . '/../../database/migrations/lead_tenant_unique_keys.php.stub')->up();
         $this->stub()->up();
 
         $this->assertTrue($this->hasIndex('permissions', ['workspace_id', 'tenant', 'name', 'guard_name'], unique: true));
@@ -144,6 +164,26 @@ class WorkspaceStubTest extends TestCase
         $this->stub()->up();
 
         $this->assertEquals(0, \Hypervel\Support\Facades\DB::table('permissions')->where('id', $id)->value('workspace_id'));
+    }
+
+    public function testPartitionColumnsFollowAUuidRoleModelsKeys(): void
+    {
+        config([
+            'acl.workspace' => true,
+            'acl.models.workspace' => AclWorkspace::class,
+            'acl.key_type' => null,
+            'permission.models.role' => UuidRole::class,
+            'acl.column_names.workspace_foreign_key' => 'workspace_id',
+        ]);
+
+        $this->assertFalse(Workspaces::usesIdKeys());
+
+        Schema::create('uuid_partitioned', function (Blueprint $table): void {
+            $table->id();
+            Workspaces::addColumn($table);
+        });
+
+        $this->assertStringNotContainsString('int', strtolower($this->columnTypeName('uuid_partitioned', 'workspace_id')));
     }
 
     public function testTheStubNeedsTheWorkspaceColumnNamed(): void

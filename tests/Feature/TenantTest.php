@@ -8,6 +8,7 @@ use Hypervel\Contracts\Foundation\Application;
 use Hypervel\Permission\PermissionRegistrar;
 use Hypervel\Support\Facades\Schema;
 use Ipsocode\Acl\Exceptions\UserAlreadyInTeam;
+use Ipsocode\Acl\Http\Controllers\TeamController;
 use Ipsocode\Acl\Models\AclTeam;
 use Ipsocode\Acl\Models\Permission;
 use Ipsocode\Acl\Models\Role;
@@ -15,6 +16,7 @@ use Ipsocode\Acl\Permission\TenantPermissionRegistrar;
 use Ipsocode\Acl\Tenant;
 use Ipsocode\Acl\Tests\TestCase;
 use RuntimeException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Workbench\App\Models\User;
 use Workbench\Database\Seeders\AclSeeder;
 
@@ -65,6 +67,29 @@ class TenantTest extends TestCase
 
             return User::find($user->id)->can($permission);
         });
+    }
+
+    public function testASharedTeamInheritedByAnotherTenantsTeamCannotBeDeleted(): void
+    {
+        (new AclSeeder)->run();
+
+        $team = AclTeam::create(['name' => 'Admins']);
+        $team->syncTeamRoles(['manager']);
+        $user = User::factory()->create();
+        $team->addUser($user);
+        $shared = AclTeam::create(['name' => 'Shared']);
+        AclTeam::create(['name' => 'Other lead', 'tenant' => 'other', 'inherit_id' => $shared->id]);
+
+        $this->app->make(PermissionRegistrar::class)->setPermissionsTeamId($team);
+
+        try {
+            Tenant::run('acme', fn () => $this->app->make(TeamController::class)->destroy($shared->id));
+            $this->fail('The shared team was deleted.');
+        } catch (HttpException $e) {
+            $this->assertSame(409, $e->getStatusCode());
+        }
+
+        $this->assertNotNull(AclTeam::query()->withoutGlobalScope('acl_tenant')->find($shared->id));
     }
 
     public function testTheTenantColumnIsOnThePermissionAndTeamTables(): void

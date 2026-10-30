@@ -257,6 +257,7 @@ class TeamInheritanceTest extends TestCase
         $lead->addUser($leadUser);
         $other->addUser($otherUser);
         $before = DB::table('acl_teams')->pluck('updated_at', 'id');
+        $joined = DB::table(Teams::ORGANIZATIONS_TABLE)->pluck('updated_at', Teams::userPivotKey());
 
         $this->travel(1)->seconds();
         $this->app->make(AccessSync::class)->markChanged($base);
@@ -273,7 +274,8 @@ class TeamInheritanceTest extends TestCase
 
         // Stored to the millisecond, which the staleness check compares at.
         $this->assertMatchesRegularExpression('/\.\d{3}$/', (string) $changed[$leadUser->id]);
-        $this->assertNull($changed[$otherUser->id]);
+        $this->assertNotSame($joined[$leadUser->id], $changed[$leadUser->id]);
+        $this->assertSame($joined[$otherUser->id], $changed[$otherUser->id]);
         $this->assertNotSame($before[$lead->id], $teams[$lead->id]);
         $this->assertSame($before[$other->id], $teams[$other->id]);
 

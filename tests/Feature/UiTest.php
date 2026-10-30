@@ -92,6 +92,7 @@ class UiTest extends TestCase
             'workspace' => null,
             'workspaceModel' => false,
             'workspaceParent' => null,
+            'teamInherit' => 'inherit_id',
             'tenant' => false,
             'guards' => ['web'],
         ], $this->bootProps($response->getContent()));
