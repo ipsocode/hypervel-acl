@@ -135,7 +135,7 @@ class Reach
         $this->forget([$workspace->getKey()]);
 
         // The assignments go first, as raw rows are not cascaded to by the roles' deletion on every database.
-        foreach ([Teams::ORGANIZATION_TABLE, Config::modelHasRolesTable(), Config::modelHasPermissionsTable(), Config::roleHasPermissionsTable(), Config::rolesTable(), Config::permissionsTable()] as $table) {
+        foreach ([Teams::ORGANIZATIONS_TABLE, Config::modelHasRolesTable(), Config::modelHasPermissionsTable(), Config::roleHasPermissionsTable(), Config::rolesTable(), Config::permissionsTable()] as $table) {
             DB::table($table)->where($column, $workspace->getKey())->delete();
         }
 
@@ -212,7 +212,7 @@ class Reach
      */
     protected function affect(array $workspaces): void
     {
-        $teams = DB::table(Teams::ORGANIZATION_TABLE)->whereIn(Workspaces::column(), $workspaces)->distinct()->pluck(Teams::teamPivotKey())->all();
+        $teams = DB::table(Teams::ORGANIZATIONS_TABLE)->whereIn(Workspaces::column(), $workspaces)->distinct()->pluck(Teams::teamPivotKey())->all();
 
         foreach (Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($teams)->get() as $team) {
             $this->sync->markChanged($team);

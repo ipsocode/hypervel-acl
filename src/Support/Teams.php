@@ -13,7 +13,7 @@ use RuntimeException;
 
 class Teams
 {
-    public const ORGANIZATION_TABLE = 'acl_organization';
+    public const ORGANIZATIONS_TABLE = 'acl_organizations';
 
     /**
      * The name of the team each tenant has for the roles everyone in it holds.

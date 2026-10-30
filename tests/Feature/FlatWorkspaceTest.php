@@ -53,7 +53,7 @@ class FlatWorkspaceTest extends WorkspaceTestCase
         $ops->addUser($user, 'berlin');
         $sales->addUser($user, 'paris');
 
-        $this->assertSame(2, DB::table(Teams::ORGANIZATION_TABLE)->where('user_id', $user->id)->count());
+        $this->assertSame(2, DB::table(Teams::ORGANIZATIONS_TABLE)->where('user_id', $user->id)->count());
 
         $this->expectException(UserAlreadyInTeam::class);
 

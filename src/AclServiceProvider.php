@@ -61,7 +61,7 @@ class AclServiceProvider extends ServiceProvider
 
             $this->publishesMigrations([
                 __DIR__ . '/../database/migrations/2026_10_29_000002_create_acl_teams_table.php' => database_path('migrations/2026_10_29_000002_create_acl_teams_table.php'),
-                __DIR__ . '/../database/migrations/2026_10_29_000003_create_acl_organization_table.php' => database_path('migrations/2026_10_29_000003_create_acl_organization_table.php'),
+                __DIR__ . '/../database/migrations/2026_10_29_000003_create_acl_organizations_table.php' => database_path('migrations/2026_10_29_000003_create_acl_organizations_table.php'),
                 __DIR__ . '/../database/migrations/2026_10_29_000004_create_acl_workspaces_table.php' => database_path('migrations/2026_10_29_000004_create_acl_workspaces_table.php'),
             ], 'acl-migrations');
 
@@ -82,7 +82,7 @@ class AclServiceProvider extends ServiceProvider
             $this->loadMigrationsFrom(__DIR__ . '/../database/migrations/2026_10_29_000004_create_acl_workspaces_table.php');
         }
 
-        $this->loadMigrationsFrom(__DIR__ . '/../database/migrations/2026_10_29_000003_create_acl_organization_table.php');
+        $this->loadMigrationsFrom(__DIR__ . '/../database/migrations/2026_10_29_000003_create_acl_organizations_table.php');
 
         $this->registerListeners();
 

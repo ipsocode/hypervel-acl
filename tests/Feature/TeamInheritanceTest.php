@@ -231,7 +231,7 @@ class TeamInheritanceTest extends TestCase
         // The teams keep their own roles.
         $this->assertSame(['viewer'], $lead->ownRoleNames());
 
-        $changed = DB::table(Teams::ORGANIZATION_TABLE)->pluck('updated_at', Teams::userPivotKey());
+        $changed = DB::table(Teams::ORGANIZATIONS_TABLE)->pluck('updated_at', Teams::userPivotKey());
         $teams = DB::table('acl_teams')->pluck('updated_at', 'id');
 
         // Stored to the millisecond, which the staleness check compares at.

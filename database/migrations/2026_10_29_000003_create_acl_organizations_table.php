@@ -33,7 +33,7 @@ return new class extends Migration {
         $workspaces = Workspaces::enabled();
         $workspace = $workspaces ? Workspaces::column() : null;
 
-        Schema::create(Teams::ORGANIZATION_TABLE, function (Blueprint $table) use ($teamModel, $team, $user, $userModel, $tenant, $pivotTeam, $pivotUser, $workspaces, $workspace): void {
+        Schema::create(Teams::ORGANIZATIONS_TABLE, function (Blueprint $table) use ($teamModel, $team, $user, $userModel, $tenant, $pivotTeam, $pivotUser, $workspaces, $workspace): void {
             (Teams::usesPackageModel() ? KeyType::resolve() : KeyType::fromModel($teamModel))->reference($table, $pivotTeam);
             KeyType::fromModel($userModel)->reference($table, $pivotUser);
 
@@ -60,10 +60,10 @@ return new class extends Migration {
 
             if ($workspaces) {
                 // The workspace leads, as Reach finds the rows of a workspace.
-                $table->primary([$workspace, $pivotTeam, $pivotUser], Teams::ORGANIZATION_TABLE . '_workspace_team_user_primary');
+                $table->primary([$workspace, $pivotTeam, $pivotUser], Teams::ORGANIZATIONS_TABLE . '_workspace_team_user_primary');
                 $table->index([$pivotUser, $workspace]);
             } else {
-                $table->primary([$pivotTeam, $pivotUser], Teams::ORGANIZATION_TABLE . '_team_user_primary');
+                $table->primary([$pivotTeam, $pivotUser], Teams::ORGANIZATIONS_TABLE . '_team_user_primary');
 
                 // One team per user in each tenant; the database holds the rule too.
                 $table->unique($tenant === null ? [$pivotUser] : [$tenant, $pivotUser]);
@@ -76,6 +76,6 @@ return new class extends Migration {
      */
     public function down(): void
     {
-        Schema::dropIfExists(Teams::ORGANIZATION_TABLE);
+        Schema::dropIfExists(Teams::ORGANIZATIONS_TABLE);
     }
 };
