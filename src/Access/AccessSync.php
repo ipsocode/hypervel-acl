@@ -45,8 +45,7 @@ class AccessSync
     public function rebuildMember(Model $user, Team $team, bool $remove = false, int|string|null $workspace = null): void
     {
         $this->asTeam($team, function () use ($user, $team, $remove): void {
-            // One transaction, so a concurrent check never sees the roles detached and not yet attached.
-            DB::transaction(fn () => $user->syncRoles($remove ? [] : $this->rolesFor($team))); // @phpstan-ignore method.notFound (the user uses HasRoles)
+            $user->syncRoles($remove ? [] : $this->rolesFor($team)); // @phpstan-ignore method.notFound (the user uses HasRoles)
         }, $workspace ?? Workspace::id());
     }
 
@@ -104,6 +103,9 @@ class AccessSync
         $this->cache->put($this->syncedCacheKey($user, $key), $synced, self::SYNCED_CACHE_TTL);
     }
 
+    /**
+     * Return the cache key of a user's last sync time for a membership.
+     */
     protected function syncedCacheKey(Model $user, string $key): string
     {
         return self::SYNCED_CACHE_KEY_PREFIX . $user->getMorphClass() . ':' . $user->getKey() . ':' . $key;
@@ -128,8 +130,6 @@ class AccessSync
     public function markChanged(Team $team): void
     {
         $keys = [$team->getKey(), ...$this->dependents($team)];
-        $now = Date::now()->format(Teams::DATE_FORMAT);
-        $model = new (Teams::model());
 
         // The teams' own rows, which hold each team's roles, stay.
         $rows = DB::table(Config::modelHasRolesTable())
@@ -140,17 +140,33 @@ class AccessSync
 
         // The times are bumped before the roles are deleted, and in one transaction: a member who
         // reads the old time never finds the roles gone, so no session is marked fresh without them.
-        DB::transaction(function () use ($keys, $now, $model, $rows): void {
-            DB::table(Teams::ORGANIZATIONS_TABLE)->whereIn(Teams::teamPivotKey(), $keys)->update(['updated_at' => $now]);
-
-            // The model's own date format keeps the milliseconds a bulk touch() would round away.
-            Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($keys)->toBase()
-                ->update([$model->getUpdatedAtColumn() => $model->freshTimestampString()]);
+        DB::transaction(function () use ($keys, $rows): void {
+            $this->touch($keys);
 
             $rows->delete();
         });
 
+        // A member rebuilt while the roles were being deleted stored a sync time later than the first
+        // one, and lost its rows to the delete: a time taken after the commit marks it stale again.
+        $this->touch($keys);
+
         $this->forgetCachedPermissions($keys, $partitions);
+    }
+
+    /**
+     * Stamp the teams and their members' org roles as changed now.
+     *
+     * @param list<int|string> $keys
+     */
+    protected function touch(array $keys): void
+    {
+        $model = new (Teams::model());
+
+        DB::table(Teams::ORGANIZATIONS_TABLE)->whereIn(Teams::teamPivotKey(), $keys)->update(['updated_at' => Date::now()->format(Teams::DATE_FORMAT)]);
+
+        // The model's own date format keeps the milliseconds a bulk touch() would round away.
+        Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($keys)->toBase()
+            ->update([$model->getUpdatedAtColumn() => $model->freshTimestampString()]);
     }
 
     /**

@@ -23,7 +23,7 @@ Every `acl:*` command first checks that the framework's permission package is ac
 
 - The permission service provider is not loaded: do not exclude `hypervel/permission` from package discovery, or register `Hypervel\Permission\PermissionServiceProvider`.
 - The permission config has no table names: run `php artisan vendor:publish --tag=permission-config`.
-- The permission package has teams off: run `php artisan permission:setup-teams` and set `permission.teams` to `true`.
+- The permission package has teams off: set `permission.teams` to `true`, then run `php artisan permission:setup-teams` if the permission tables already exist.
 - The permission tables are not migrated: run `php artisan acl:setup`, then `php artisan migrate`. `acl:setup` itself skips this check, since it publishes the migration.
 
 `acl:setup` takes two options. `--pretend` lists the migrations it would write and writes nothing, not even the bundled UI's assets. `--force` overwrites the migrations a previous run generated, in place, and does not ask for confirmation. Without either, the command asks before it writes; under `--no-interaction` it never asks and proceeds.
@@ -50,7 +50,7 @@ php artisan acl:status --only=tenant --only=workspace
 
 `acl:make-seeder` takes the seeder's name (`AclSeeder` by default) and `--force`, which replaces a seeder that already exists.
 
-If the permission tables already exist without team columns, run the framework's `permission:setup-teams` first. Run `php artisan migrate` afterwards.
+If the permission tables already exist without team columns, set `permission.teams` to `true` and run the framework's `permission:setup-teams` first. Run `php artisan migrate` afterwards.
 
 ## UUID and ULID Keys
 

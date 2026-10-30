@@ -16,6 +16,7 @@ permissions:
 env:
   COMPOSER_CACHE_DIR: /tmp/composer-cache
   COMPOSER_MEMORY_LIMIT: '-1'
+  OTEL_SDK_DISABLED: 'true'
   COMPOSER_AUTH: '{"github-oauth":{"github.com":"${{ github.token }}"}}'
 
 jobs:

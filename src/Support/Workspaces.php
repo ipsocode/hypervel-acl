@@ -71,7 +71,12 @@ class Workspaces
     {
         $model = static::model();
 
-        return $model !== null && KeyType::fromModel($model) === KeyType::Id;
+        if ($model === null) {
+            return false;
+        }
+
+        // The package's workspace model takes its key type from the configuration, as HasConfiguredKey does.
+        return (static::usesPackageModel() ? KeyType::resolve() : KeyType::fromModel($model)) === KeyType::Id;
     }
 
     /**

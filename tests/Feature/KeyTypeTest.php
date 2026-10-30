@@ -11,6 +11,7 @@ use Ipsocode\Acl\Models\AclTeam;
 use Ipsocode\Acl\Models\Permission;
 use Ipsocode\Acl\Models\Role;
 use Ipsocode\Acl\Support\KeyType;
+use Ipsocode\Acl\Testing\TestState;
 use Ipsocode\Acl\Tests\Fixtures\UlidRole;
 use Ipsocode\Acl\Tests\Fixtures\UuidRole;
 use Ipsocode\Acl\Tests\Fixtures\UuidUser;
@@ -56,11 +57,13 @@ class KeyTypeTest extends TestCase
             $this->assertSame('int', (new $model)->getKeyType());
 
             config(['acl.key_type' => 'uuid']);
+            TestState::flushState();
             $this->assertTrue((new $model)->usesUniqueIds());
             $this->assertSame('string', (new $model)->getKeyType());
             $this->assertFalse((new $model)->getIncrementing());
 
             config(['acl.key_type' => null]);
+            TestState::flushState();
         }
     }
 
