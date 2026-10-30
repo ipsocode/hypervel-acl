@@ -75,16 +75,13 @@ class StatusTest extends TestCase
             'acl.tenant' => true,
             'acl.column_names.tenant_foreign_key' => 'tenant',
             'acl.workspace' => true,
-            'acl.key_type' => 'uuid',
         ]);
 
-        // The key type problem is no feature's, so a limited report leaves it out.
         $this->artisan('acl:status', ['--only' => ['tenant']])
             ->expectsOutputToContain('Permission package')
             ->expectsOutputToContain('add_tenant_column')
             ->doesntExpectOutputToContain('add_workspace_column')
             ->doesntExpectOutputToContain('Guards')
-            ->doesntExpectOutputToContain('permissions table uses')
             ->assertExitCode(0);
 
         $this->artisan('acl:status', ['--only' => ['workspace']])
@@ -97,8 +94,23 @@ class StatusTest extends TestCase
             ->expectsOutputToContain('add_tenant_column')
             ->expectsOutputToContain('add_workspace_column')
             ->assertExitCode(0);
+    }
 
-        $this->artisan('acl:status')->expectsOutputToContain('permissions table uses')->assertExitCode(1);
+    public function testALimitedStatusKeepsTheGeneralProblems(): void
+    {
+        config(['acl.tenant' => true, 'acl.column_names.tenant_foreign_key' => 'tenant', 'acl.key_type' => 'uuid']);
+
+        $this->artisan('acl:status', ['--only' => ['tenant']])
+            ->expectsOutputToContain('permissions table uses')
+            ->doesntExpectOutputToContain('Guards')
+            ->assertExitCode(1);
+
+        config(['acl.key_type' => null]);
+        Schema::dropIfExists('users');
+
+        $this->artisan('acl:status', ['--only' => ['workspace']])
+            ->expectsOutputToContain('users table users does not exist')
+            ->assertExitCode(1);
     }
 
     public function testALimitedStatusKeepsTheProblemsOfItsFeatureAndOfThePermissionPackage(): void
