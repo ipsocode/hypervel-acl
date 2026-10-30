@@ -85,6 +85,16 @@ class HttpTest extends TestCase
         $this->getJson("acl/teams/{$id}")->assertNotFound();
     }
 
+    public function testATeamOthersInheritCannotBeDeleted(): void
+    {
+        $base = AclTeam::create(['name' => 'Base']);
+        AclTeam::create(['name' => 'Lead', 'inherit_id' => $base->id]);
+
+        $this->deleteJson("acl/teams/{$base->id}")->assertStatus(409);
+
+        $this->assertTrue(AclTeam::query()->whereKey($base->id)->exists());
+    }
+
     public function testTeamUsers(): void
     {
         $ops = AclTeam::create(['name' => 'Ops']);
