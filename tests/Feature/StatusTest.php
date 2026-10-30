@@ -90,6 +90,7 @@ class StatusTest extends TestCase
         $this->artisan('acl:status', ['--only' => ['workspace']])
             ->expectsOutputToContain('Workspace model')
             ->expectsOutputToContain('add_workspace_column')
+            ->expectsOutputToContain('add_team_index')
             ->doesntExpectOutputToContain('add_tenant_column')
             ->assertExitCode(0);
 

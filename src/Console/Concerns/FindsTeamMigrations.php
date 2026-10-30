@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Ipsocode\Acl\Console\Concerns;
 
 use Hypervel\Support\Facades\File;
+use Ipsocode\Acl\Console\StatusSection;
 use Ipsocode\Acl\Support\Teams;
 use Ipsocode\Acl\Support\Workspaces;
 use SplFileInfo;
@@ -23,11 +24,21 @@ trait FindsTeamMigrations
      */
     protected function teamStubs(): array
     {
+        return array_keys($this->teamStubSections());
+    }
+
+    /**
+     * Get the stubs to copy, each with the section of acl:status it belongs to.
+     *
+     * @return array<string, StatusSection>
+     */
+    protected function teamStubSections(): array
+    {
         return [
-            ...(Teams::usesPackageModel() ? [] : ['add_team_inheritance']),
-            ...(Teams::tenantColumn() !== null ? ['add_tenant_column', 'lead_tenant_unique_keys'] : []),
-            ...(Workspaces::enabled() ? ['add_workspace_column', 'add_team_index'] : []),
-            ...(Workspaces::enabled() && Workspaces::model() !== null && ! Workspaces::usesPackageModel() ? ['add_workspace_parent'] : []),
+            ...(Teams::usesPackageModel() ? [] : ['add_team_inheritance' => StatusSection::General]),
+            ...(Teams::tenantColumn() !== null ? ['add_tenant_column' => StatusSection::Tenant, 'lead_tenant_unique_keys' => StatusSection::Tenant] : []),
+            ...(Workspaces::enabled() ? ['add_workspace_column' => StatusSection::Workspace, 'add_team_index' => StatusSection::Workspace] : []),
+            ...(Workspaces::enabled() && Workspaces::model() !== null && ! Workspaces::usesPackageModel() ? ['add_workspace_parent' => StatusSection::Workspace] : []),
         ];
     }
 
