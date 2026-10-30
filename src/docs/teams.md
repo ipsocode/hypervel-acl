@@ -1,6 +1,6 @@
 # Teams
 
-A team is an organizational role: one set of the global roles, held by every member of the team. Membership is kept in the `acl_organizations` table, whose `team_id` and `user_id` columns you may rename with `acl.column_names.team_pivot_key` and `acl.column_names.user_pivot_key`. The package uses the framework's teams feature to give members the team's roles as assignments with `team_id = T`, and checks see the roles of the current team only.
+A team is an organizational role: one set of the global roles, held by every member of the team. Membership is kept in the `acl_organizations` table, whose `team_id` and `user_id` columns you may rename: the team column is the framework's `permission.column_names.team_foreign_key`, and the user column is `acl.column_names.user_pivot_key`. The package uses the framework's teams feature to give members the team's roles as assignments with `team_id = T`, and checks see the roles of the current team only.
 
 ```php
 $ops = AclTeam::create(['name' => 'Ops']);

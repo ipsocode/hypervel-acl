@@ -309,7 +309,7 @@ class AccessSync
      */
     public function rolesFor(Team $team): array
     {
-        $pivot = config('permission.column_names.role_pivot_key') ?? PermissionRegistrar::DEFAULT_ROLE_PIVOT_KEY;
+        $pivot = $this->registrar->pivotRole;
 
         // Each team's own roles are held by the team model itself, under its own id.
         $held = DB::table(Config::modelHasRolesTable())

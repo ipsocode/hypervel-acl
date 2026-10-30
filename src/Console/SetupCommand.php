@@ -39,7 +39,7 @@ class SetupCommand extends Command
         $pretend = $this->option('pretend');
 
         $teamKey = PermissionConfig::teamForeignKey();
-        $roles = config('permission.table_names.roles');
+        $roles = PermissionConfig::rolesTable();
 
         if (Schema::hasTable($roles) && ! Schema::hasColumn($roles, $teamKey)) {
             $this->error('The permission tables have no team columns: run permission:setup-teams and migrate first.');
@@ -132,7 +132,7 @@ class SetupCommand extends Command
      */
     protected function chooseKeyType(): void
     {
-        if (config('acl.key_type') !== null || KeyType::fromPermissionsTable() !== null || ! $this->input->isInteractive()) {
+        if (Config::keyType() !== null || KeyType::fromPermissionsTable() !== null || ! $this->input->isInteractive()) {
             return;
         }
 

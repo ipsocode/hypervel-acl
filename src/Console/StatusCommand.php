@@ -7,6 +7,7 @@ namespace Ipsocode\Acl\Console;
 use Closure;
 use Hypervel\Console\Command;
 use Hypervel\Permission\Guard;
+use Hypervel\Permission\Support\Config as PermissionConfig;
 use Hypervel\Support\Facades\Schema;
 use Ipsocode\Acl\Console\Concerns\ChecksPermissionPackage;
 use Ipsocode\Acl\Console\Concerns\FindsTeamMigrations;
@@ -58,7 +59,7 @@ class StatusCommand extends Command
             $problems[] = [StatusSection::Tenant, 'acl.tenant is on but acl.column_names.tenant_foreign_key names no column.'];
         }
 
-        $configured = config('acl.key_type');
+        $configured = Config::keyType();
         $actual = KeyType::fromPermissionsTable();
 
         if ($configured !== null && $actual !== null && $actual->value !== $configured) {
@@ -71,7 +72,7 @@ class StatusCommand extends Command
 
         $this->table(['Setting', 'Value'], $this->rows($shown, [
             [StatusSection::Package, 'Permission package', $active ? 'active' : 'not active'],
-            [StatusSection::General, 'Teams', $this->state(config('permission.teams') === true)],
+            [StatusSection::General, 'Teams', $this->state(PermissionConfig::teamsEnabled())],
             [StatusSection::Tenant, 'Tenant', $this->state(Config::tenantEnabled())],
             [StatusSection::Workspace, 'Workspace', $this->state(Workspaces::enabled())],
             [StatusSection::General, 'Team model', Teams::model()],
