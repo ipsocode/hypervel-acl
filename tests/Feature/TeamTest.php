@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Ipsocode\Acl\Tests\Feature;
 
+use Hypervel\Http\Request;
 use Hypervel\Permission\PermissionRegistrar;
 use Hypervel\Support\Facades\DB;
 use Ipsocode\Acl\Access\AccessSync;
@@ -12,6 +13,7 @@ use Ipsocode\Acl\Http\Middleware\ResolveAcl;
 use Ipsocode\Acl\Models\AclTeam;
 use Ipsocode\Acl\Support\Teams;
 use Ipsocode\Acl\Tests\TestCase;
+use Symfony\Component\HttpFoundation\Response;
 use Workbench\App\Models\User;
 use Workbench\Database\Seeders\AclSeeder;
 
@@ -171,6 +173,58 @@ class TeamTest extends TestCase
         $this->assertSame(0, \Hypervel\Support\Facades\DB::table('model_has_roles')->count());
     }
 
+    public function testDeletingATeamRunsTheSameQueriesWhateverItsMemberCount(): void
+    {
+        $queries = function (int $members): int {
+            $team = $this->team("Team {$members}", ['viewer']);
+
+            User::factory()->count($members)->create()->each(fn (User $user) => $team->addUser($user));
+
+            $count = 0;
+            DB::listen(function () use (&$count): void {
+                ++$count;
+            });
+
+            $team->delete();
+
+            return $count;
+        };
+
+        $this->assertSame($queries(1), $queries(4));
+    }
+
+    public function testDeletingATeamRemovesTheRolesOfMembersThatNoLongerResolve(): void
+    {
+        $ops = $this->team('Ops', ['viewer']);
+        $user = User::factory()->create();
+
+        $ops->addUser($user);
+        DB::table($user->getTable())->delete();
+        $ops->delete();
+
+        $this->assertSame(0, DB::table('model_has_roles')->count());
+    }
+
+    public function testChangingATeamBumpsTheMembershipTimeBeforeTheRolesAreDeleted(): void
+    {
+        $ops = $this->team('Ops', ['viewer']);
+        $ops->addUser(User::factory()->create());
+
+        $statements = [];
+        DB::listen(function ($query) use (&$statements): void {
+            $statements[] = $query->sql;
+        });
+
+        $this->app->make(AccessSync::class)->markChanged($ops);
+
+        $bumped = array_key_first(array_filter($statements, fn (string $sql): bool => str_starts_with($sql, 'update "acl_organizations"')));
+        $deleted = array_key_first(array_filter($statements, fn (string $sql): bool => str_starts_with($sql, 'delete from "model_has_roles"')));
+
+        $this->assertNotNull($bumped);
+        $this->assertNotNull($deleted);
+        $this->assertLessThan($deleted, $bumped);
+    }
+
     public function testTheSessionRemembersTheSyncSoAnUpToDateMemberIsNotRebuilt(): void
     {
         $ops = $this->team('Ops', ['viewer']);
@@ -191,6 +245,37 @@ class TeamTest extends TestCase
         $this->nextRequest($user);
 
         $this->assertNotSame($synced['at'], session(ResolveAcl::SESSION_KEY)['at']);
+        $this->assertSame(['editor'], $this->rolesOf($user, $ops));
+    }
+
+    public function testARequestWithoutASessionRebuildsOnlyAfterTheMembershipChanged(): void
+    {
+        $ops = $this->team('Ops', ['viewer']);
+        $user = User::factory()->create();
+        $ops->addUser($user);
+
+        $request = function () use ($user): void {
+            $request = Request::create('/');
+            $request->setUserResolver(fn () => $user);
+
+            $this->app->make(ResolveAcl::class)->handle($request, fn (): Response => new Response);
+        };
+
+        $request();
+        $this->assertSame(['viewer'], $this->rolesOf($user, $ops));
+
+        $writes = 0;
+        DB::listen(function ($query) use (&$writes): void {
+            $writes += preg_match('/^(insert|delete|update)/', $query->sql);
+        });
+
+        $request();
+        $this->assertSame(0, $writes);
+
+        $this->travel(1)->seconds();
+        $ops->syncTeamRoles(['editor']);
+        $request();
+
         $this->assertSame(['editor'], $this->rolesOf($user, $ops));
     }
 
@@ -229,6 +314,6 @@ class TeamTest extends TestCase
         $leaving->delete();
         $sales->delete();
 
-        $this->assertSame(0, DB::table(Teams::MEMBERS_TABLE)->count());
+        $this->assertSame(0, DB::table(Teams::ORGANIZATIONS_TABLE)->count());
     }
 }

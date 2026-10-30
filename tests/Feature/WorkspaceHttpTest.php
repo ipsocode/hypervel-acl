@@ -10,6 +10,7 @@ use Hypervel\Permission\Support\Config;
 use Hypervel\Support\Facades\DB;
 use Ipsocode\Acl\Models\AclTeam;
 use Ipsocode\Acl\Models\AclWorkspace;
+use Ipsocode\Acl\Support\Teams;
 use Ipsocode\Acl\Tests\WorkspaceTestCase;
 use Ipsocode\Acl\Workspaces\Reach;
 use Ipsocode\Acl\Workspaces\RequestWorkspaceResolver;
@@ -56,6 +57,17 @@ class WorkspaceHttpTest extends WorkspaceTestCase
         $this->withHeader('X-Workspace', (string) $this->north->id)->getJson('acl/workspaces')->assertOk()->assertJsonCount(2, 'data');
     }
 
+    public function testAWorkspaceNameIsUniqueBeneathItsParent(): void
+    {
+        $sibling = AclWorkspace::create(['name' => 'Sibling', 'parent_id' => $this->corporate->id]);
+
+        $this->postJson('acl/workspaces', ['name' => 'North', 'parent_id' => $this->corporate->id])->assertUnprocessable()->assertJsonValidationErrors('name');
+        $this->postJson('acl/workspaces', ['name' => 'North', 'parent_id' => $this->north->id])->assertCreated();
+        $this->putJson("acl/workspaces/{$sibling->id}", ['name' => 'North'])->assertUnprocessable()->assertJsonValidationErrors('name');
+        $this->putJson("acl/workspaces/{$sibling->id}", ['name' => 'Sibling', 'parent_id' => $this->corporate->id])->assertOk();
+        $this->postJson('acl/workspaces', ['name' => 'Elsewhere', 'parent_id' => null])->assertCreated();
+    }
+
     public function testAWorkspaceIsShownWithItsAncestors(): void
     {
         $this->getJson("acl/workspaces/{$this->branch->id}")
@@ -100,13 +112,13 @@ class WorkspaceHttpTest extends WorkspaceTestCase
         $user = User::factory()->create();
 
         $this->postJson("acl/teams/{$ops->id}/users", ['user_id' => $user->id, 'workspace' => $this->north->id])->assertCreated();
-        $this->assertSame(1, DB::table('acl_team_workspace_user')->where('user_id', $user->id)->count());
+        $this->assertSame(1, DB::table(Teams::ORGANIZATIONS_TABLE)->where('user_id', $user->id)->count());
 
         // The workspace chain rule is a validation error.
         $this->postJson("acl/teams/{$ops->id}/users", ['user_id' => $user->id, 'workspace' => $this->branch->id])->assertUnprocessable();
 
         $this->deleteJson("acl/teams/{$ops->id}/users/{$user->id}?workspace={$this->north->id}")->assertNoContent();
-        $this->assertSame(0, DB::table('acl_team_workspace_user')->where('user_id', $user->id)->count());
+        $this->assertSame(0, DB::table(Teams::ORGANIZATIONS_TABLE)->where('user_id', $user->id)->count());
     }
 
     public function testTheReachIsTheWorkspaceTheRequestActsInAndBeneath(): void
@@ -131,13 +143,13 @@ class WorkspaceHttpTest extends WorkspaceTestCase
         $user = User::factory()->create();
 
         $this->withHeader('X-Workspace', (string) $this->north->id)->postJson("acl/teams/{$ops->id}/users", ['user_id' => $user->id])->assertCreated();
-        $this->assertSame($this->north->id, DB::table('acl_team_workspace_user')->where('user_id', $user->id)->value('workspace_id'));
+        $this->assertSame($this->north->id, DB::table(Teams::ORGANIZATIONS_TABLE)->where('user_id', $user->id)->value('workspace_id'));
 
         $other = User::factory()->create();
         $this->withHeader('X-Workspace', (string) $this->north->id)->postJson("acl/teams/{$ops->id}/users", ['user_id' => $other->id, 'workspace' => $this->elsewhere->id])->assertUnprocessable();
         $this->withHeader('X-Workspace', (string) $this->north->id)->postJson("acl/teams/{$ops->id}/users", ['user_id' => $other->id, 'workspace' => 0])->assertUnprocessable();
         $this->postJson("acl/teams/{$ops->id}/users", ['user_id' => $other->id, 'workspace' => 9999])->assertUnprocessable();
-        $this->assertSame(0, DB::table('acl_team_workspace_user')->where('user_id', $other->id)->count());
+        $this->assertSame(0, DB::table(Teams::ORGANIZATIONS_TABLE)->where('user_id', $other->id)->count());
     }
 
     public function testOnlyTheHomeWorkspaceCreatesOrMovesAWorkspaceToTheTop(): void
@@ -198,10 +210,10 @@ class WorkspaceHttpTest extends WorkspaceTestCase
 
         $north->deleteJson("acl/teams/{$ops->id}/users/{$inSouth->id}?workspace={$south->id}")->assertUnprocessable();
         $north->deleteJson("acl/teams/{$ops->id}/users/{$inSouth->id}")->assertNoContent();
-        $this->assertSame(1, DB::table('acl_team_workspace_user')->where('user_id', $inSouth->id)->count());
+        $this->assertSame(1, DB::table(Teams::ORGANIZATIONS_TABLE)->where('user_id', $inSouth->id)->count());
 
         $north->deleteJson("acl/teams/{$ops->id}/users/{$inNorth->id}")->assertNoContent();
-        $this->assertSame(0, DB::table('acl_team_workspace_user')->where('user_id', $inNorth->id)->count());
+        $this->assertSame(0, DB::table(Teams::ORGANIZATIONS_TABLE)->where('user_id', $inNorth->id)->count());
     }
 
     public function testAWorkspaceKeyMustBeOneKey(): void
@@ -263,7 +275,7 @@ class WorkspaceHttpTest extends WorkspaceTestCase
         $ops->addUser($user, $this->north->id);
 
         $this->deleteJson("acl/teams/{$ops->id}/users/{$user->id}")->assertNoContent();
-        $this->assertSame(0, DB::table('acl_team_workspace_user')->where('user_id', $user->id)->count());
+        $this->assertSame(0, DB::table(Teams::ORGANIZATIONS_TABLE)->where('user_id', $user->id)->count());
     }
 
     public function testAnEmptyWorkspaceHeaderForgetsTheSelection(): void

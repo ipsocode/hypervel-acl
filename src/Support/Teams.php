@@ -13,9 +13,7 @@ use RuntimeException;
 
 class Teams
 {
-    public const MEMBERS_TABLE = 'acl_team_user';
-
-    public const WORKSPACE_MEMBERS_TABLE = 'acl_team_workspace_user';
+    public const ORGANIZATIONS_TABLE = 'acl_organizations';
 
     /**
      * The name of the team each tenant has for the roles everyone in it holds.
@@ -54,15 +52,7 @@ class Teams
     }
 
     /**
-     * Get the table holding the users' org roles: the workspace one with workspaces on, else the team one.
-     */
-    public static function membersTable(): string
-    {
-        return Workspaces::enabled() ? self::WORKSPACE_MEMBERS_TABLE : self::MEMBERS_TABLE;
-    }
-
-    /**
-     * Get the membership table's team column: acl.column_names.team_pivot_key, else team_id.
+     * Get the org role table's team column: acl.column_names.team_pivot_key, else team_id.
      */
     public static function teamPivotKey(): string
     {
@@ -70,7 +60,7 @@ class Teams
     }
 
     /**
-     * Get the membership table's user column: acl.column_names.user_pivot_key, else user_id.
+     * Get the org role table's user column: acl.column_names.user_pivot_key, else user_id.
      */
     public static function userPivotKey(): string
     {

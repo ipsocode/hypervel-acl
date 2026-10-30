@@ -6,6 +6,7 @@ namespace Ipsocode\Acl\Http\Resources;
 
 use Hypervel\Http\Resources\Json\JsonResource;
 use Ipsocode\Acl\Contracts\Team;
+use Ipsocode\Acl\Support\Config;
 
 /**
  * @mixin Team
@@ -22,7 +23,7 @@ class TeamResource extends JsonResource
             'id' => $this->getKey(), // @phpstan-ignore method.notFound (the team is a model)
             'name' => $this->name, // @phpstan-ignore property.notFound (the team is a model)
             'tenant' => $this->tenant(),
-            'inherit_id' => $this->inheritedTeam()?->getKey(),
+            Config::teamsInheritKey() => $this->inheritedTeam()?->getKey(),
             'roles' => $this->ownRoleNames(),
         ];
     }

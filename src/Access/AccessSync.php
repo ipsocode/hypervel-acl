@@ -7,11 +7,9 @@ namespace Ipsocode\Acl\Access;
 use Closure;
 use Hypervel\Contracts\Cache\Repository as CacheRepository;
 use Hypervel\Database\Eloquent\Model;
-use Hypervel\Database\Eloquent\Relations\Relation;
 use Hypervel\Database\Query\Builder as QueryBuilder;
 use Hypervel\Permission\PermissionRegistrar;
 use Hypervel\Permission\Support\Config;
-use Hypervel\Support\Collection;
 use Hypervel\Support\Facades\Date;
 use Hypervel\Support\Facades\DB;
 use Ipsocode\Acl\Contracts\Team;
@@ -20,13 +18,19 @@ use Ipsocode\Acl\Support\Teams;
 use Ipsocode\Acl\Support\Workspaces;
 use Ipsocode\Acl\Tenant;
 use Ipsocode\Acl\Workspace;
-use stdClass;
 
 class AccessSync
 {
     public const CHAIN_CACHE_KEY_PREFIX = 'acl:team-chain:';
 
     public const DEPENDENTS_CACHE_KEY_PREFIX = 'acl:team-dependents:';
+
+    public const SYNCED_CACHE_KEY_PREFIX = 'acl:synced:';
+
+    /**
+     * The seconds a request without a session is remembered as synced.
+     */
+    public const SYNCED_CACHE_TTL = 86400;
 
     public function __construct(protected PermissionRegistrar $registrar, protected CacheRepository $cache)
     {
@@ -41,7 +45,8 @@ class AccessSync
     public function rebuildMember(Model $user, Team $team, bool $remove = false, int|string|null $workspace = null): void
     {
         $this->asTeam($team, function () use ($user, $team, $remove): void {
-            $user->syncRoles($remove ? [] : $this->rolesFor($team)); // @phpstan-ignore method.notFound (the user uses HasRoles)
+            // One transaction, so a concurrent check never sees the roles detached and not yet attached.
+            DB::transaction(fn () => $user->syncRoles($remove ? [] : $this->rolesFor($team))); // @phpstan-ignore method.notFound (the user uses HasRoles)
         }, $workspace ?? Workspace::id());
     }
 
@@ -81,6 +86,30 @@ class AccessSync
     }
 
     /**
+     * Get when a user without a session was last rebuilt for a team and workspace, as 'team:workspace'.
+     */
+    public function syncedAt(Model $user, string $key): ?string
+    {
+        /** @var null|string $synced */
+        $synced = $this->cache->get($this->syncedCacheKey($user, $key));
+
+        return $synced;
+    }
+
+    /**
+     * Remember when a user without a session was rebuilt, so only a change to the membership rebuilds it again.
+     */
+    public function rememberSynced(Model $user, string $key, string $synced): void
+    {
+        $this->cache->put($this->syncedCacheKey($user, $key), $synced, self::SYNCED_CACHE_TTL);
+    }
+
+    protected function syncedCacheKey(Model $user, string $key): string
+    {
+        return self::SYNCED_CACHE_KEY_PREFIX . $user->getMorphClass() . ':' . $user->getKey() . ':' . $key;
+    }
+
+    /**
      * Determine whether a membership changed since its member was last synced.
      *
      * Equal times count as stale, so a change and a sync in the same millisecond only cost a rebuild.
@@ -109,13 +138,17 @@ class AccessSync
 
         $partitions = $this->partitions(clone $rows);
 
-        $rows->delete();
+        // The times are bumped before the roles are deleted, and in one transaction: a member who
+        // reads the old time never finds the roles gone, so no session is marked fresh without them.
+        DB::transaction(function () use ($keys, $now, $model, $rows): void {
+            DB::table(Teams::ORGANIZATIONS_TABLE)->whereIn(Teams::teamPivotKey(), $keys)->update(['updated_at' => $now]);
 
-        DB::table(Teams::membersTable())->whereIn(Teams::teamPivotKey(), $keys)->update(['updated_at' => $now]);
+            // The model's own date format keeps the milliseconds a bulk touch() would round away.
+            Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($keys)->toBase()
+                ->update([$model->getUpdatedAtColumn() => $model->freshTimestampString()]);
 
-        // The model's own date format keeps the milliseconds a bulk touch() would round away.
-        Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($keys)->toBase()
-            ->update([$model->getUpdatedAtColumn() => $model->freshTimestampString()]);
+            $rows->delete();
+        });
 
         $this->forgetCachedPermissions($keys, $partitions);
     }
@@ -162,13 +195,13 @@ class AccessSync
      */
     public function purge(Team $team): void
     {
-        foreach ($this->rows($team, withOwn: true) as $row) {
-            $subject = $this->subject($row);
+        $rows = DB::table(Config::modelHasRolesTable())->where(Config::teamForeignKey(), $team->getKey());
 
-            if ($subject !== null) {
-                $this->rebuildMember($subject, $team, remove: true, workspace: $row->workspace ?? null);
-            }
-        }
+        $partitions = $this->partitions(clone $rows);
+
+        $rows->delete();
+
+        $this->forgetCachedPermissions([$team->getKey()], $partitions);
     }
 
     /**
@@ -288,31 +321,6 @@ class AccessSync
         foreach ([$team->getKey(), ...$this->dependents($team)] as $key) {
             $this->cache->forget(self::CHAIN_CACHE_KEY_PREFIX . $key);
         }
-    }
-
-    /**
-     * Get the distinct subject type and subject key of the rows a team's roles are held in.
-     *
-     * @param Model&Team $team
-     * @return Collection<int, stdClass>
-     */
-    protected function rows(Team $team, bool $withOwn): Collection
-    {
-        return DB::table(Config::modelHasRolesTable())
-            ->where(Config::teamForeignKey(), $team->getKey())
-            ->when(! $withOwn, fn ($query) => $query->where('model_type', '!=', $team->getMorphClass()))
-            ->distinct()
-            ->get(['model_type', Config::morphKey() . ' as model_id', ...(Workspaces::enabled() ? [Workspaces::column() . ' as workspace'] : [])]);
-    }
-
-    /**
-     * Find the model a row holds roles for.
-     */
-    protected function subject(stdClass $row): ?Model
-    {
-        $class = Relation::getMorphedModel($row->model_type) ?? $row->model_type;
-
-        return $class::query()->find($row->model_id);
     }
 
     /**

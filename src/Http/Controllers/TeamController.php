@@ -173,7 +173,7 @@ class TeamController extends Controller
      */
     protected function membersWithin(Team $team): QueryBuilder
     {
-        return DB::table(Teams::membersTable())
+        return DB::table(Teams::ORGANIZATIONS_TABLE)
             ->where(Teams::teamPivotKey(), $team->getKey())
             ->whereIn(Workspaces::column(), app(Reach::class)->beneath(Workspace::id()));
     }

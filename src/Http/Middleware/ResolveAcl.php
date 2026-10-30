@@ -45,7 +45,7 @@ class ResolveAcl
      * workspaces on, they act in the workspace the request names, else the one of their only org
      * role, else the home workspace, as the team of the org role held there or above it; with none,
      * the request is refused. When the org role changed after the time the session was synced at,
-     * the user's roles are rebuilt; a request without a session rebuilds them every time. This does
+     * the user's roles are rebuilt; a request without a session keeps that time in the cache instead. This does
      * not authorize anything.
      */
     public function handle(Request $request, Closure $next): Response
@@ -60,7 +60,7 @@ class ResolveAcl
 
             $tenant = Teams::tenantColumn();
 
-            $memberships = DB::table(Teams::membersTable())
+            $memberships = DB::table(Teams::ORGANIZATIONS_TABLE)
                 ->where(Teams::userPivotKey(), $user->getKey())
                 ->when($tenant !== null && Tenant::check(), fn ($query) => $query->where(
                     fn ($query) => $query->whereNull($tenant)->orWhere($tenant, Tenant::id())
@@ -84,13 +84,18 @@ class ResolveAcl
             $synced = $session?->get(self::SESSION_KEY);
             $times = is_array($synced) && is_array($synced['at'] ?? null) ? $synced['at'] : [];
             $key = $membership->team . ':' . $workspace;
+            $last = $session === null ? $this->sync->syncedAt($user, $key) : ($times[$key] ?? null);
 
-            if ($this->sync->isStale($times[$key] ?? null, $membership->changed)) {
+            if ($this->sync->isStale($last, $membership->changed)) {
                 /** @var Model&Team $team */
                 $team = Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($membership->team)->firstOrFail();
                 $times[$key] = $this->sync->refresh($user, $team);
 
-                $session?->put(self::SESSION_KEY, ['team' => $membership->team, 'at' => $times]);
+                if ($session === null) {
+                    $this->sync->rememberSynced($user, $key, $times[$key]);
+                } else {
+                    $session->put(self::SESSION_KEY, ['team' => $membership->team, 'at' => $times]);
+                }
             }
         }
 
