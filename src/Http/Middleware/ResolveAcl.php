@@ -68,8 +68,7 @@ class ResolveAcl
                 ->get([Teams::teamPivotKey() . ' as team', 'updated_at as changed', ...(Workspaces::enabled() ? [Workspaces::column() . ' as workspace'] : [])]);
 
             if (Workspaces::enabled()) {
-                $workspace = $this->workspace($request, $memberships);
-                $membership = $memberships->first(fn (stdClass $row): bool => $this->reach->covers($row->workspace, $workspace));
+                [$workspace, $membership] = $this->workspace($request, $memberships);
 
                 Workspace::set($workspace);
             } else {
@@ -83,7 +82,7 @@ class ResolveAcl
 
             $session = $request->hasSession() ? $request->session() : null;
             $synced = $session?->get(self::SESSION_KEY);
-            $times = is_array($synced) ? $synced['at'] : [];
+            $times = is_array($synced) && is_array($synced['at'] ?? null) ? $synced['at'] : [];
             $key = $membership->team . ':' . $workspace;
 
             if ($this->sync->isStale($times[$key] ?? null, $membership->changed)) {
@@ -99,23 +98,29 @@ class ResolveAcl
     }
 
     /**
-     * Get the workspace the request acts in: one an org role of the user covers.
+     * Get the workspace the request acts in, one an org role of the user covers, and that org role.
      *
      * @param Collection<int, stdClass> $memberships
+     * @return array{int|string, stdClass}
      */
-    protected function workspace(Request $request, Collection $memberships): int|string
+    protected function workspace(Request $request, Collection $memberships): array
     {
         abort_unless($memberships->isNotEmpty(), 403, 'The user holds no org role.');
 
         $workspace = $this->resolver->resolve($request) ?? ($memberships->count() === 1 ? $memberships->first()->workspace : Workspace::HOME);
 
-        if (! $memberships->contains(fn (stdClass $row): bool => $this->reach->covers($row->workspace, $workspace))) {
+        // The workspace may come from the request, so it must exist before it is cached or kept in the session.
+        $membership = $this->reach->exists($workspace)
+            ? $memberships->first(fn (stdClass $row): bool => $this->reach->covers($row->workspace, $workspace))
+            : null;
+
+        if ($membership === null) {
             // A selection kept from before the user's org roles changed must not lock them out.
             $request->hasSession() && $request->session()->forget(RequestWorkspaceResolver::SESSION_KEY);
 
             abort(403, 'No org role of the user covers the workspace.');
         }
 
-        return $workspace;
+        return [$workspace, $membership];
     }
 }

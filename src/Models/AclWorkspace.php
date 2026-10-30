@@ -40,6 +40,14 @@ class AclWorkspace extends Model
     }
 
     /**
+     * Delete the workspace together with its teams' org roles, roles and permissions, or none of it.
+     */
+    public function delete(): int|bool|null
+    {
+        return $this->getConnection()->transaction(fn () => parent::delete());
+    }
+
+    /**
      * Get the table name: table_names.workspace, else acl_workspaces.
      */
     public function getTable(): string

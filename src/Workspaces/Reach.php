@@ -6,12 +6,14 @@ namespace Ipsocode\Acl\Workspaces;
 
 use Hypervel\Contracts\Cache\Repository as CacheRepository;
 use Hypervel\Database\Eloquent\Model;
+use Hypervel\Permission\PermissionRegistrar;
 use Hypervel\Permission\Support\Config;
 use Hypervel\Support\Facades\DB;
 use Ipsocode\Acl\Access\AccessSync;
 use Ipsocode\Acl\Models\AclWorkspace;
 use Ipsocode\Acl\Support\Teams;
 use Ipsocode\Acl\Support\Workspaces;
+use Ipsocode\Acl\Tenant;
 use Ipsocode\Acl\Workspace;
 
 /**
@@ -22,7 +24,7 @@ class Reach
 {
     public const CACHE_KEY_PREFIX = 'acl:workspace-ancestors:';
 
-    public function __construct(protected CacheRepository $cache, protected AccessSync $sync)
+    public function __construct(protected CacheRepository $cache, protected AccessSync $sync, protected PermissionRegistrar $registrar)
     {
     }
 
@@ -33,10 +35,44 @@ class Reach
      */
     public function ancestorsOf(int|string $workspace): array
     {
-        /** @var list<int|string> $ancestors */
-        $ancestors = $this->cache->rememberForever(self::CACHE_KEY_PREFIX . $workspace, fn (): array => Workspaces::ancestorKeys($workspace));
+        if (Workspaces::model() === null) {
+            return [$workspace];
+        }
+
+        /** @var null|list<int|string> $cached */
+        $cached = $this->cache->get(self::CACHE_KEY_PREFIX . $workspace);
+
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $ancestors = Workspaces::ancestorKeys($workspace);
+
+        // The key may come from a request: only a workspace that exists is kept.
+        if ($this->exists($workspace)) {
+            $this->cache->forever(self::CACHE_KEY_PREFIX . $workspace, $ancestors);
+        }
 
         return $ancestors;
+    }
+
+    /**
+     * Determine whether the workspace exists: the home one always, and one the application
+     * identifies itself, which has no table to check, as far as it can be told.
+     */
+    public function exists(int|string $workspace): bool
+    {
+        return (string) $workspace === (string) Workspace::HOME
+            || Workspaces::model() === null
+            || Workspaces::query()->withoutGlobalScope('acl_tenant')->whereKey($workspace)->exists();
+    }
+
+    /**
+     * Determine whether the workspace exists and the one the request acts in covers it.
+     */
+    public function reaches(int|string $workspace): bool
+    {
+        return $this->covers(Workspace::id(), $workspace) && $this->exists($workspace);
     }
 
     /**
@@ -56,9 +92,7 @@ class Reach
     public function beneath(int|string $workspace): array
     {
         if ((string) $workspace === (string) Workspace::HOME) {
-            $query = Workspaces::query();
-
-            return [Workspace::HOME, ...array_values($query->pluck($query->getModel()->getKeyName())->all())];
+            return Workspaces::partitions();
         }
 
         return [$workspace, ...Workspaces::descendantKeys([$workspace])];
@@ -88,7 +122,9 @@ class Reach
 
     /**
      * Mark the teams holding org roles around a workspace about to be deleted as changed, and
-     * delete its org roles, roles, permissions and assignments.
+     * delete its org roles, roles, permissions and assignments, and forget what was cached for them.
+     *
+     * Run it inside the delete's transaction: the workspace may still refuse to go.
      *
      * @param AclWorkspace $workspace
      */
@@ -104,6 +140,10 @@ class Reach
         foreach ([Teams::WORKSPACE_MEMBERS_TABLE, Config::modelHasRolesTable(), Config::modelHasPermissionsTable(), Config::roleHasPermissionsTable(), Config::rolesTable(), Config::permissionsTable()] as $table) {
             DB::table($table)->where($column, $workspace->getKey())->delete();
         }
+
+        $tenant = Teams::tenantColumn();
+
+        Tenant::run($tenant === null ? null : $workspace->getAttribute($tenant), fn () => Workspace::run($workspace->getKey(), fn () => $this->registrar->forgetCachedPermissions()));
     }
 
     /**

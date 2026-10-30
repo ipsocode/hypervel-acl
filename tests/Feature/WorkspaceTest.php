@@ -218,6 +218,17 @@ class WorkspaceTest extends WorkspaceTestCase
         $this->assertSame([$key, "{$ops->id}:{$this->branchA->id}"], array_keys(session(ResolveAcl::SESSION_KEY)['at']));
     }
 
+    public function testASessionSyncedBeforeTheTimesWerePerWorkspaceIsRebuilt(): void
+    {
+        [$ops, $user] = $this->ops();
+
+        session([ResolveAcl::SESSION_KEY => ['team' => $ops->id, 'at' => '2026-01-01 00:00:00']]);
+
+        $this->requestIn($user, $this->north->id);
+
+        $this->assertSame(["{$ops->id}:{$this->north->id}"], array_keys(session(ResolveAcl::SESSION_KEY)['at']));
+    }
+
     public function testATeamChangeMakesEveryWorkspaceStale(): void
     {
         [$ops, $user] = $this->ops();

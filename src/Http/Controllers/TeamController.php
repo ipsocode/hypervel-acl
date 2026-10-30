@@ -18,7 +18,9 @@ use Ipsocode\Acl\Http\Requests\TeamRequest;
 use Ipsocode\Acl\Http\Resources\TeamResource;
 use Ipsocode\Acl\Support\Config;
 use Ipsocode\Acl\Support\Teams;
+use Ipsocode\Acl\Support\Workspaces;
 use Ipsocode\Acl\Workspace;
+use Ipsocode\Acl\Workspaces\Reach;
 use Symfony\Component\HttpFoundation\Response;
 
 class TeamController extends Controller
@@ -77,9 +79,14 @@ class TeamController extends Controller
         $team = $this->teams()->findOrFail($team);
         $input = $request->validate(['user_id' => ['required'], 'workspace' => ['sometimes', 'nullable']]);
         $user = $this->userModel()::query()->whereKey($input['user_id'])->firstOrFail();
+        $workspace = $input['workspace'] ?? Workspace::id();
+
+        if (Workspaces::enabled() && ! app(Reach::class)->reaches($workspace)) {
+            throw ValidationException::withMessages(['workspace' => 'The workspace is not one the org role covers.']);
+        }
 
         try {
-            $team->addUser($user, $input['workspace'] ?? Workspace::HOME);
+            $team->addUser($user, $workspace);
         } catch (UserAlreadyInTeam $exception) {
             throw ValidationException::withMessages(['user_id' => $exception->getMessage()]);
         }
@@ -89,7 +96,7 @@ class TeamController extends Controller
 
     public function removeUser(Request $request, int|string $team, int|string $user): Response
     {
-        $this->teams()->findOrFail($team)->removeUser($this->userModel()::query()->whereKey($user)->firstOrFail(), $request->filled('workspace') ? $request->string('workspace')->toString() : null);
+        $this->teams()->findOrFail($team)->removeUser($this->userModel()::query()->whereKey($user)->firstOrFail(), Workspaces::enabled() && $request->filled('workspace') ? $request->string('workspace')->toString() : null);
 
         return response()->noContent();
     }

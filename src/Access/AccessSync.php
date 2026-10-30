@@ -8,6 +8,7 @@ use Closure;
 use Hypervel\Contracts\Cache\Repository as CacheRepository;
 use Hypervel\Database\Eloquent\Model;
 use Hypervel\Database\Eloquent\Relations\Relation;
+use Hypervel\Database\Query\Builder as QueryBuilder;
 use Hypervel\Permission\PermissionRegistrar;
 use Hypervel\Permission\Support\Config;
 use Hypervel\Support\Collection;
@@ -122,10 +123,9 @@ class AccessSync
     /**
      * Get the workspaces the rows are in, or the home one with workspaces off.
      *
-     * @param \Hypervel\Database\Query\Builder $rows
      * @return list<int|string>
      */
-    protected function partitions($rows): array
+    protected function partitions(QueryBuilder $rows): array
     {
         /** @var list<int|string> $partitions */
         $partitions = Workspaces::enabled() ? $rows->distinct()->pluck(Workspaces::column())->all() : [Workspace::HOME];

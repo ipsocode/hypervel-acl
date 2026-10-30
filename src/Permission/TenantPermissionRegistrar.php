@@ -17,24 +17,6 @@ use Ipsocode\Acl\Tenant;
  */
 class TenantPermissionRegistrar extends PermissionRegistrar
 {
-    public bool $tenant;
-
-    public bool $workspace;
-
-    /**
-     * Initialize cache and config-backed registrar state, and whether tenants and workspaces are enabled.
-     *
-     * Boot or tests only. The values are stored on the singleton registrar and
-     * affect every later permission lookup in this worker.
-     */
-    public function initializeCache(): void
-    {
-        parent::initializeCache();
-
-        $this->tenant = $this->config->boolean('acl.tenant');
-        $this->workspace = $this->config->boolean('acl.workspace');
-    }
-
     /**
      * Add the permission partition, and the current tenant, to a cache key.
      *
