@@ -7,6 +7,7 @@ namespace Ipsocode\Acl\Http\Requests;
 use Closure;
 use Hypervel\Foundation\Http\FormRequest;
 use Hypervel\Permission\PermissionRegistrar;
+use Ipsocode\Acl\Support\Config;
 use Ipsocode\Acl\Support\Teams;
 
 class TeamRequest extends FormRequest
@@ -31,7 +32,7 @@ class TeamRequest extends FormRequest
             'meta' => ['sometimes', 'nullable', 'array'],
         ];
 
-        $rules['inherit_id'] = ['sometimes', 'nullable', function (string $attribute, mixed $value, Closure $fail) use ($column, $tenant, $current): void {
+        $rules[Config::teamsInheritKey()] = ['sometimes', 'nullable', function (string $attribute, mixed $value, Closure $fail) use ($column, $tenant, $current): void {
             $query = Teams::query()->whereKey($value);
             $own = Teams::query()->find($tenant);
 
