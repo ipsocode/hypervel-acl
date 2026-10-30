@@ -14,8 +14,6 @@ use RuntimeException;
 
 class Workspaces
 {
-    public const DEFAULT_PARENT_COLUMN = 'parent_id';
-
     /**
      * Determine whether workspaces partition the permission tables.
      */
@@ -41,11 +39,11 @@ class Workspaces
     }
 
     /**
-     * Get the workspace model's column that holds the parent workspace: acl.column_names.workspace_parent, else parent_id.
+     * Get the workspace model's column that holds the parent workspace: acl.column_names.workspace_parent.
      */
     public static function parentColumn(): string
     {
-        return Config::workspaceParentColumn() ?? self::DEFAULT_PARENT_COLUMN;
+        return Config::workspaceParentColumn();
     }
 
     /**

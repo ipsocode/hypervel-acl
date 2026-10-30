@@ -24,15 +24,13 @@ class AclWorkspace extends Model
     protected array $casts = ['meta' => 'array'];
 
     /**
-     * Keep the teams' reach right as workspaces are added, moved and deleted.
+     * Keep the teams' reach right as workspaces are moved and deleted.
      */
     protected static function booted(): void
     {
-        static::created(static fn (self $workspace) => app(Reach::class)->workspaceChanged($workspace, moved: false));
-
         static::updated(static function (self $workspace): void {
             if ($workspace->wasChanged(Workspaces::parentColumn())) {
-                app(Reach::class)->workspaceChanged($workspace, moved: true);
+                app(Reach::class)->workspaceChanged($workspace);
             }
         });
 

@@ -86,6 +86,6 @@ class WorkspaceController extends Controller
      */
     protected function workspaces(): Builder
     {
-        return Workspaces::query()->whereKey($this->reach->beneath(Workspace::id()));
+        return $this->reach->within(Workspaces::query());
     }
 }
