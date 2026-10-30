@@ -28,7 +28,17 @@ class TeamRequest extends FormRequest
         $current = $this->route('team');
 
         $rules = [
-            'name' => ['required', 'string'],
+            'name' => ['required', 'string', function (string $attribute, mixed $value, Closure $fail) use ($column, $tenant, $current): void {
+                $taken = Teams::query()->withoutGlobalScope('acl_tenant')
+                    ->where('name', $value)
+                    ->when($column !== null, fn ($query) => $query->where($column, Teams::query()->find($tenant)?->tenant()))
+                    ->when($current !== null, fn ($query) => $query->whereKeyNot($current))
+                    ->exists();
+
+                if ($taken) {
+                    $fail('The name has already been taken.');
+                }
+            }],
             'meta' => ['sometimes', 'nullable', 'array'],
         ];
 
