@@ -7,6 +7,8 @@ namespace Ipsocode\Acl\Tests\Feature;
 use Hypervel\Database\Schema\Blueprint;
 use Hypervel\Support\Facades\Schema;
 use Ipsocode\Acl\Models\AclTeam;
+use Ipsocode\Acl\Models\Permission;
+use Ipsocode\Acl\Models\Role;
 use Ipsocode\Acl\Support\KeyType;
 use Ipsocode\Acl\Tests\Fixtures\UuidRole;
 use Ipsocode\Acl\Tests\TestCase;
@@ -42,5 +44,20 @@ class KeyTypeTest extends TestCase
         $this->assertIsInt($team->id);
         $this->assertTrue($team->getIncrementing());
         $this->assertSame('int', $team->getKeyType());
+    }
+
+    public function testRolesAndPermissionsFollowTheConfiguredKeyType(): void
+    {
+        foreach ([Role::class, Permission::class] as $model) {
+            $this->assertFalse((new $model)->usesUniqueIds());
+            $this->assertSame('int', (new $model)->getKeyType());
+
+            config(['acl.key_type' => 'uuid']);
+            $this->assertTrue((new $model)->usesUniqueIds());
+            $this->assertSame('string', (new $model)->getKeyType());
+            $this->assertFalse((new $model)->getIncrementing());
+
+            config(['acl.key_type' => null]);
+        }
     }
 }
