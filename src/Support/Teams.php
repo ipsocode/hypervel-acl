@@ -25,10 +25,6 @@ class Teams
      */
     public const TENANT_SCOPE = 'acl_tenant';
 
-    public const DEFAULT_TEAM_PIVOT_KEY = 'team_id';
-
-    public const DEFAULT_USER_PIVOT_KEY = 'user_id';
-
     /**
      * The precision membership timestamps are written at: a team's change and a member's sync
      * are compared to the millisecond.
@@ -57,11 +53,11 @@ class Teams
     }
 
     /**
-     * Get the org role table's team column: acl.column_names.team_pivot_key, else team_id.
+     * Get the org role table's team column: permission.column_names.team_foreign_key.
      */
     public static function teamPivotKey(): string
     {
-        return config('acl.column_names.team_pivot_key') ?? self::DEFAULT_TEAM_PIVOT_KEY;
+        return Config::teamPivotKey();
     }
 
     /**
@@ -69,7 +65,7 @@ class Teams
      */
     public static function userPivotKey(): string
     {
-        return config('acl.column_names.user_pivot_key') ?? self::DEFAULT_USER_PIVOT_KEY;
+        return Config::userPivotKey();
     }
 
     /**

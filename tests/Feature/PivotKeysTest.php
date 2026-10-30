@@ -19,7 +19,7 @@ class PivotKeysTest extends TestCase
     {
         parent::defineEnvironment($app);
 
-        $app->get('config')->set('acl.column_names.team_pivot_key', 'group_id');
+        $app->get('config')->set('permission.column_names.team_foreign_key', 'group_id');
         $app->get('config')->set('acl.column_names.user_pivot_key', 'member_id');
     }
 

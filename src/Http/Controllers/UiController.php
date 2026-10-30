@@ -23,7 +23,7 @@ class UiController extends Controller
     public function index(UiAssets $assets): Response|View
     {
         $props = [
-            'path' => '/' . trim(config()->string('acl.ui.path'), '/'),
+            'path' => '/' . Config::uiPath(),
             'workspaces' => Workspaces::enabled(),
             'workspace' => Workspaces::enabled() ? Workspace::id() : null,
             'workspaceModel' => Workspaces::enabled() && Workspaces::model() !== null,

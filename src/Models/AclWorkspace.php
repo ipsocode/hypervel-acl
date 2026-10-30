@@ -11,6 +11,7 @@ use Hypervel\Database\Eloquent\Relations\BelongsTo;
 use Hypervel\Database\Eloquent\Relations\HasMany;
 use Ipsocode\Acl\Concerns\BelongsToTenant;
 use Ipsocode\Acl\Concerns\HasConfiguredKey;
+use Ipsocode\Acl\Support\Config;
 use Ipsocode\Acl\Support\Workspaces;
 use Ipsocode\Acl\Workspaces\Reach;
 
@@ -50,7 +51,7 @@ class AclWorkspace extends Model
      */
     public function getTable(): string
     {
-        return config('acl.table_names.workspace') ?? 'acl_workspaces';
+        return Config::workspaceTable();
     }
 
     /**
