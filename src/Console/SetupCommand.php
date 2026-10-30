@@ -29,7 +29,7 @@ class SetupCommand extends Command
      */
     public function handle(): int
     {
-        if (($problem = $this->permissionPackageProblem()) !== null) {
+        if (($problem = $this->permissionPackageProblem(migrated: false)) !== null) {
             $this->error($problem);
 
             return self::FAILURE;
