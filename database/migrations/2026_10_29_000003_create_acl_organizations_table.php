@@ -34,7 +34,7 @@ return new class extends Migration {
         $workspace = $workspaces ? Workspaces::column() : null;
 
         Schema::create(Teams::ORGANIZATIONS_TABLE, function (Blueprint $table) use ($teamModel, $team, $user, $userModel, $tenant, $pivotTeam, $pivotUser, $workspaces, $workspace): void {
-            (Teams::usesPackageModel() ? KeyType::resolve() : KeyType::fromModel($teamModel))->reference($table, $pivotTeam);
+            (Teams::usesPackageModel() ? KeyType::forMigration() : KeyType::fromModel($teamModel))->reference($table, $pivotTeam);
             KeyType::fromModel($userModel)->reference($table, $pivotUser);
 
             if ($workspaces) {
