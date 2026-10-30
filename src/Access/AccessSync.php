@@ -45,8 +45,7 @@ class AccessSync
     public function rebuildMember(Model $user, Team $team, bool $remove = false, int|string|null $workspace = null): void
     {
         $this->asTeam($team, function () use ($user, $team, $remove): void {
-            // One transaction, so a concurrent check never sees the roles detached and not yet attached.
-            DB::transaction(fn () => $user->syncRoles($remove ? [] : $this->rolesFor($team))); // @phpstan-ignore method.notFound (the user uses HasRoles)
+            $user->syncRoles($remove ? [] : $this->rolesFor($team)); // @phpstan-ignore method.notFound (the user uses HasRoles)
         }, $workspace ?? Workspace::id());
     }
 
@@ -104,6 +103,9 @@ class AccessSync
         $this->cache->put($this->syncedCacheKey($user, $key), $synced, self::SYNCED_CACHE_TTL);
     }
 
+    /**
+     * Return the cache key of a user's last sync time for a membership.
+     */
     protected function syncedCacheKey(Model $user, string $key): string
     {
         return self::SYNCED_CACHE_KEY_PREFIX . $user->getMorphClass() . ':' . $user->getKey() . ':' . $key;

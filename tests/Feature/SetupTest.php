@@ -72,11 +72,12 @@ class SetupTest extends TestCase
             $created = implode(' ', array_map('basename', array_diff(glob(database_path('migrations/*')), $before)));
             $this->assertStringContainsString('_add_team_inheritance.php', $created);
             $this->assertStringContainsString('_add_tenant_column.php', $created);
+            $this->assertStringContainsString('_lead_tenant_unique_keys.php', $created);
             $this->assertStringNotContainsString('_create_acl_teams_table.php', $created);
 
             // Everything exists now: the stubs are skipped and nothing is created again.
             $this->artisan('acl:setup')->expectsOutputToContain('already exist and are skipped')->assertExitCode(0);
-            $this->assertCount(3, array_diff(glob(database_path('migrations/*')), $before));
+            $this->assertCount(4, array_diff(glob(database_path('migrations/*')), $before));
         } finally {
             array_map('unlink', array_diff(glob(database_path('migrations/*')), $before));
         }
@@ -108,7 +109,7 @@ class SetupTest extends TestCase
     public function testSetupFailsWithAnActionableMessageWhenThePermissionPackageIsNotActive(): void
     {
         config(['permission.teams' => false]);
-        $this->artisan('acl:setup')->expectsOutputToContain('permission:setup-teams')->assertExitCode(1);
+        $this->artisan('acl:setup')->expectsOutputToContain('set permission.teams to true, then run php artisan permission:setup-teams')->assertExitCode(1);
 
         config(['permission.teams' => true, 'permission.table_names.roles' => null]);
         $this->artisan('acl:setup', ['--no-interaction' => true])->expectsOutputToContain('--tag=permission-config')->assertExitCode(1);

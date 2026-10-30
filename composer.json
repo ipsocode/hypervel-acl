@@ -53,6 +53,9 @@
         "hypervel": {
             "providers": [
                 "Ipsocode\\Acl\\AclServiceProvider"
+            ],
+            "test-state": [
+                "Ipsocode\\Acl\\Testing\\TestState"
             ]
         }
     },

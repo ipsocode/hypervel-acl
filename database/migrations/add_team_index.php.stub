@@ -1,0 +1,37 @@
+<?php
+
+declare(strict_types=1);
+
+use Hypervel\Database\Migrations\Migration;
+use Hypervel\Database\Schema\Blueprint;
+use Hypervel\Support\Facades\Schema;
+use Ipsocode\Acl\Support\Teams;
+
+return new class extends Migration {
+    /**
+     * Run the migrations.
+     *
+     * With workspaces on, the org role table's primary key leads with the workspace, so the
+     * lookups by team (a team's role change, its members, the cascade from the team table) need
+     * an index of their own. Adds it where the table exists without one.
+     */
+    public function up(): void
+    {
+        $pivotTeam = Teams::teamPivotKey();
+
+        if (! Schema::hasTable(Teams::ORGANIZATIONS_TABLE) || Schema::hasIndex(Teams::ORGANIZATIONS_TABLE, [$pivotTeam])) {
+            return;
+        }
+
+        Schema::table(Teams::ORGANIZATIONS_TABLE, static fn (Blueprint $table) => $table->index($pivotTeam));
+    }
+
+    /**
+     * Reverse the migrations.
+     *
+     * The index may have come with the table before this ran, so it is left in place.
+     */
+    public function down(): void
+    {
+    }
+};

@@ -61,7 +61,7 @@ class TeamController extends Controller
     {
         $team = $this->teams()->findOrFail($team);
 
-        abort_if(Teams::query()->where(Config::teamsInheritKey(), $team->getKey())->exists(), 409, 'The team is inherited by other teams.');
+        abort_if(Teams::query()->withoutGlobalScope('acl_tenant')->where(Config::teamsInheritKey(), $team->getKey())->exists(), 409, 'The team is inherited by other teams.');
 
         $team->delete();
 

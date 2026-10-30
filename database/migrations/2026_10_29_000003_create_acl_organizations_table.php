@@ -62,6 +62,9 @@ return new class extends Migration {
                 // The workspace leads, as Reach finds the rows of a workspace.
                 $table->primary([$workspace, $pivotTeam, $pivotUser], Teams::ORGANIZATIONS_TABLE . '_workspace_team_user_primary');
                 $table->index([$pivotUser, $workspace]);
+
+                // The team lookups (a role change, the members, the cascade) do not lead with the workspace.
+                $table->index($pivotTeam);
             } else {
                 $table->primary([$pivotTeam, $pivotUser], Teams::ORGANIZATIONS_TABLE . '_team_user_primary');
 
