@@ -38,6 +38,21 @@ class FactoryTest extends TestCase
         $this->assertSame([$user->id], $team->memberKeys());
     }
 
+    public function testInTeamLeavesTheFactoryItWasCalledOnUntouched(): void
+    {
+        $first = AclTeam::create(['name' => 'Ops']);
+        $second = AclTeam::create(['name' => 'Sales']);
+        $first->syncTeamRoles(['editor']);
+        $second->syncTeamRoles(['editor']);
+
+        $base = User::factory();
+        $a = $base->inTeam($first)->member()->create();
+        $b = $base->inTeam($second)->member()->create();
+
+        $this->assertSame([$a->id], $first->memberKeys());
+        $this->assertSame([$b->id], $second->memberKeys());
+    }
+
     public function testStatesNeedATeam(): void
     {
         $this->expectException(LogicException::class);
