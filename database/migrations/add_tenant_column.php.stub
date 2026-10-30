@@ -1,0 +1,61 @@
+<?php
+
+declare(strict_types=1);
+
+use Hypervel\Database\Migrations\Migration;
+use Hypervel\Database\Schema\Blueprint;
+use Hypervel\Support\Facades\Schema;
+use Ipsocode\Acl\Support\Teams;
+
+return new class extends Migration {
+    /**
+     * Run the migrations.
+     *
+     * With acl.tenant on, adds acl.column_names.tenant_foreign_key to the five permission tables
+     * and the team table, wherever it is missing. The column is nullable, as existing rows have
+     * no tenant yet.
+     */
+    public function up(): void
+    {
+        $tenant = Teams::tenantColumn();
+
+        if ($tenant === null) {
+            return;
+        }
+
+        foreach ($this->tables() as $name) {
+            if (! Schema::hasColumn($name, $tenant)) {
+                Schema::table($name, static fn (Blueprint $table) => $table->string($tenant)->nullable());
+            }
+        }
+    }
+
+    /**
+     * Reverse the migrations.
+     *
+     * The column may have been the application's own before this ran, so it is left in place.
+     */
+    public function down(): void
+    {
+    }
+
+    /**
+     * Get the tables that carry a tenant: the permission tables and the team table.
+     *
+     * @return list<string>
+     */
+    protected function tables(): array
+    {
+        $names = config()->array('permission.table_names');
+        $model = Teams::model();
+
+        return [
+            $names['roles'],
+            $names['permissions'],
+            $names['model_has_roles'],
+            $names['model_has_permissions'],
+            $names['role_has_permissions'],
+            (new $model)->getTable(),
+        ];
+    }
+};

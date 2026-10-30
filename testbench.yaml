@@ -1,0 +1,37 @@
+# Testbench / Workbench configuration for ipsocode/hypervel-acl.
+#
+# `workbench/` is the host application the package is tested against: its User model and its enum catalogue stand in for an app's.
+
+providers:
+  - Ipsocode\Acl\AclServiceProvider
+
+# Applied to the Testbench CLI only; phpunit.xml mirrors it for the suite.
+env:
+  APP_NAME: "Hypervel ACL Workbench"
+  APP_ENV: testing
+  DB_CONNECTION: sqlite
+  DB_DATABASE: ":memory:"
+  # SQLite enforces foreign keys only when asked; the composite keys are part of what is tested.
+  DB_FOREIGN_KEYS: true
+  TELESCOPE_ENABLED: false
+
+seeders:
+  - Workbench\Database\Seeders\DatabaseSeeder
+
+workbench:
+  auth: true
+  health: false
+  discovers:
+    config: true
+    factories: true
+    web: false
+    api: false
+    commands: true
+    components: false
+    views: false
+
+purge:
+  files:
+    - .env
+  directories:
+    - storage/framework/aop

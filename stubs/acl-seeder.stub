@@ -1,0 +1,20 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use Ipsocode\Acl\Database\Seeders\AclSeeder as BaseAclSeeder;
+
+class {{ class }} extends BaseAclSeeder
+{
+    /**
+     * Get the roles to seed.
+     *
+     * @return list<\Ipsocode\Acl\Contracts\RoleDefinition>
+     */
+    protected function definitions(): array
+    {
+        return [];
+    }
+}

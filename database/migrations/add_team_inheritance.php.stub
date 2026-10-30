@@ -1,0 +1,44 @@
+<?php
+
+declare(strict_types=1);
+
+use Hypervel\Database\Migrations\Migration;
+use Hypervel\Database\Schema\Blueprint;
+use Hypervel\Support\Facades\Schema;
+use Ipsocode\Acl\Support\KeyType;
+use Ipsocode\Acl\Support\Teams;
+
+return new class extends Migration {
+    /**
+     * Run the migrations.
+     *
+     * Adds the inherited-team column to the application's own team table, if it lacks it. The
+     * column holds the key of another row of the same table.
+     */
+    public function up(): void
+    {
+        $model = Teams::model();
+        $team = new $model;
+        $name = $team->getTable();
+        $inherited = config()->string('acl.column_names.teams_inherit_key');
+
+        if (Schema::hasColumn($name, $inherited)) {
+            return;
+        }
+
+        $key = KeyType::fromModel($model);
+
+        Schema::table($name, function (Blueprint $table) use ($name, $inherited, $key, $team): void {
+            $key->reference($table, $inherited)->nullable()->constrained($name, $team->getKeyName());
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     *
+     * The column may have been the application's own before this ran, so it is left in place.
+     */
+    public function down(): void
+    {
+    }
+};
