@@ -17,6 +17,7 @@ use Hypervel\Support\ServiceProvider;
 use Ipsocode\Acl\Access\AccessSync;
 use Ipsocode\Acl\Console\MakeAclSeederCommand;
 use Ipsocode\Acl\Console\SetupCommand;
+use Ipsocode\Acl\Console\StatusCommand;
 use Ipsocode\Acl\Contracts\Team;
 use Ipsocode\Acl\Contracts\WorkspaceResolver;
 use Ipsocode\Acl\Events\OrgRoleAdding;
@@ -68,7 +69,7 @@ class AclServiceProvider extends ServiceProvider
             $this->publishes([__DIR__ . '/../dist' => public_path('vendor/acl')], 'acl-assets');
             $this->publishes($this->reactPages(), 'acl-react');
 
-            $this->commands([MakeAclSeederCommand::class, SetupCommand::class]);
+            $this->commands([MakeAclSeederCommand::class, SetupCommand::class, StatusCommand::class]);
 
             $this->registerConsoleOptions();
         }

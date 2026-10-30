@@ -10,6 +10,32 @@ use Hypervel\Support\Facades\Schema;
 trait ChecksPermissionPackage
 {
     /**
+     * Determine if hypervel/permission is active, reporting what is missing when it is not.
+     *
+     * With the permission config unpublished, an interactive run offers to publish it. The
+     * application's config is read at boot, so the command is run again afterwards.
+     */
+    protected function ensurePermissionPackage(bool $migrated = true): bool
+    {
+        $problem = $this->permissionPackageProblem($migrated);
+
+        if ($problem === null) {
+            return true;
+        }
+
+        $this->error($problem);
+
+        if (! is_string($this->hypervel->get('config')->get('permission.table_names.roles'))
+            && $this->input->isInteractive()
+            && $this->confirm('Publish the permission config now?', true)) {
+            $this->call('vendor:publish', ['--tag' => 'permission-config']);
+            $this->info('Set permission.teams to true in config/permission.php, then run this command again.');
+        }
+
+        return false;
+    }
+
+    /**
      * Describe what is missing for hypervel/permission to be active, or null when it is.
      *
      * Pass $migrated false for a command that publishes the migrations, which cannot need them to have run.

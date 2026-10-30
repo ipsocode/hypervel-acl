@@ -111,7 +111,7 @@ class SetupTest extends TestCase
         $this->artisan('acl:setup')->expectsOutputToContain('permission:setup-teams')->assertExitCode(1);
 
         config(['permission.teams' => true, 'permission.table_names.roles' => null]);
-        $this->artisan('acl:setup')->expectsOutputToContain('--tag=permission-config')->assertExitCode(1);
+        $this->artisan('acl:setup', ['--no-interaction' => true])->expectsOutputToContain('--tag=permission-config')->assertExitCode(1);
 
         config(['permission.table_names.roles' => 'roles']);
         (function (): void {
@@ -170,6 +170,30 @@ class SetupTest extends TestCase
             $this->assertCount(1, array_diff(glob(database_path('migrations/*')), $before));
         } finally {
             array_map('unlink', array_diff(glob(database_path('migrations/*')), $before));
+        }
+    }
+
+    public function testSetupOffersToPublishTheUnpublishedPermissionConfig(): void
+    {
+        config(['permission.table_names.roles' => null]);
+        $path = config_path('permission.php');
+        $existed = file_exists($path);
+        $original = $existed ? file_get_contents($path) : null;
+
+        try {
+            $this->artisan('acl:setup')
+                ->expectsConfirmation('Publish the permission config now?', 'no')
+                ->assertExitCode(1);
+
+            $this->artisan('acl:setup', ['--force' => true, '--no-interaction' => true])->assertExitCode(1);
+
+            $this->artisan('acl:setup')
+                ->expectsConfirmation('Publish the permission config now?', 'yes')
+                ->expectsOutputToContain('run this command again')
+                ->assertExitCode(1);
+            $this->assertFileExists($path);
+        } finally {
+            $existed ? file_put_contents($path, $original) : @unlink($path);
         }
     }
 }

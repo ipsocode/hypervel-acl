@@ -7,18 +7,16 @@ namespace Ipsocode\Acl\Console;
 use Hypervel\Console\Command;
 use Hypervel\Permission\Support\Config as PermissionConfig;
 use Hypervel\Support\Facades\Date;
-use Hypervel\Support\Facades\File;
 use Hypervel\Support\Facades\Schema;
 use Ipsocode\Acl\Console\Concerns\ChecksPermissionPackage;
+use Ipsocode\Acl\Console\Concerns\FindsTeamMigrations;
 use Ipsocode\Acl\Support\Config;
 use Ipsocode\Acl\Support\Frontend;
-use Ipsocode\Acl\Support\Teams;
-use Ipsocode\Acl\Support\Workspaces;
-use SplFileInfo;
 
 class SetupCommand extends Command
 {
     use ChecksPermissionPackage;
+    use FindsTeamMigrations;
 
     protected ?string $signature = 'acl:setup {--force : Overwrite the migrations already generated} {--pretend : List the migrations without writing them}';
 
@@ -29,9 +27,7 @@ class SetupCommand extends Command
      */
     public function handle(): int
     {
-        if (($problem = $this->permissionPackageProblem(migrated: false)) !== null) {
-            $this->error($problem);
-
+        if (! $this->ensurePermissionPackage(migrated: false)) {
             return self::FAILURE;
         }
 
@@ -119,49 +115,6 @@ class SetupCommand extends Command
         $this->line('');
 
         return self::SUCCESS;
-    }
-
-    /**
-     * Get the stubs to copy: the inheritance column for the application's own team table, and,
-     * with acl.tenant on, the tenant column for the permission and team tables, and, with
-     * acl.workspace on, the partition column for the permission tables and, for the application's
-     * own workspace model, its parent column.
-     *
-     * The package's team and workspace tables are migrations the package loads itself.
-     *
-     * @return list<string>
-     */
-    protected function teamStubs(): array
-    {
-        return [
-            ...(Teams::usesPackageModel() ? [] : ['add_team_inheritance']),
-            ...(Teams::tenantColumn() !== null ? ['add_tenant_column'] : []),
-            ...(Workspaces::enabled() ? ['add_workspace_column'] : []),
-            ...(Workspaces::enabled() && Workspaces::model() !== null && ! Workspaces::usesPackageModel() ? ['add_workspace_parent'] : []),
-        ];
-    }
-
-    /**
-     * Get the names of the migrations already generated for a stub.
-     *
-     * @return array<int, string>
-     */
-    protected function alreadyExistingMigrations(string $stub): array
-    {
-        return collect($this->migrationNames())
-            ->filter(fn (string $name) => preg_match('/^\d{4}_\d{2}_\d{2}_\d{6}_' . $stub . '\.php$/', $name) === 1)
-            ->values()
-            ->all();
-    }
-
-    /**
-     * Get the file names in the application's migrations directory.
-     *
-     * @return array<int, string>
-     */
-    protected function migrationNames(): array
-    {
-        return array_map(fn (SplFileInfo $file) => $file->getFilename(), File::files(database_path('migrations')));
     }
 
     /**
