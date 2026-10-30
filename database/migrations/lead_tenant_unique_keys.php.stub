@@ -1,0 +1,66 @@
+<?php
+
+declare(strict_types=1);
+
+use Hypervel\Database\Migrations\Migration;
+use Hypervel\Database\Schema\Blueprint;
+use Hypervel\Support\Facades\Schema;
+use Ipsocode\Acl\Support\Teams;
+
+return new class extends Migration {
+    /**
+     * Run the migrations.
+     *
+     * With acl.tenant on, puts the tenant column first in the unique key of a role or permission
+     * name and of a user's org role, so two tenants may hold a role or permission of the same name
+     * and a user may be in a team of each tenant. A key that already leads with it is left alone,
+     * so an application that ran an earlier add_tenant_column migration gets the keys by running
+     * this one once.
+     */
+    public function up(): void
+    {
+        $tenant = Teams::tenantColumn();
+
+        if ($tenant === null) {
+            return;
+        }
+
+        $names = config()->array('permission.table_names');
+
+        $this->leadUniqueKeyWithTenant($names['roles'], $tenant, ['name', 'guard_name']);
+        $this->leadUniqueKeyWithTenant($names['permissions'], $tenant, ['name', 'guard_name']);
+        $this->leadUniqueKeyWithTenant(Teams::ORGANIZATIONS_TABLE, $tenant, [Teams::userPivotKey()]);
+    }
+
+    /**
+     * Reverse the migrations.
+     *
+     * The keys are left as they are, as the tenant column may have been the application's own.
+     */
+    public function down(): void
+    {
+    }
+
+    /**
+     * Recreate the unique key made of the given columns with the tenant first.
+     *
+     * @param list<string> $columns
+     */
+    protected function leadUniqueKeyWithTenant(string $name, string $tenant, array $columns): void
+    {
+        if (! Schema::hasColumn($name, $tenant)) {
+            return;
+        }
+
+        foreach (Schema::getIndexes($name) as $index) {
+            if ($index['unique'] && ! $index['primary'] && array_diff($columns, $index['columns']) === [] && $index['columns'][0] !== $tenant) {
+                Schema::table($name, static function (Blueprint $table) use ($index, $tenant): void {
+                    $table->dropUnique($index['name']);
+                    $table->unique([$tenant, ...$index['columns']]);
+                });
+
+                return;
+            }
+        }
+    }
+};
