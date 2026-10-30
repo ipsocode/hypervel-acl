@@ -7,6 +7,7 @@ namespace Ipsocode\Acl\Tests\Feature;
 use Hypervel\Database\QueryException;
 use Hypervel\Permission\PermissionRegistrar;
 use Hypervel\Support\Facades\Cache;
+use Hypervel\Support\Facades\Date;
 use Hypervel\Support\Facades\DB;
 use Ipsocode\Acl\Access\AccessSync;
 use Ipsocode\Acl\Models\AclTeam;
@@ -278,5 +279,33 @@ class TeamInheritanceTest extends TestCase
 
         $this->nextRequest($leadUser);
         $this->assertSame(['viewer'], $this->rolesOf($leadUser, $lead));
+    }
+
+    public function testAMemberSyncedWhileTheRolesAreBeingDeletedIsRebuiltAgain(): void
+    {
+        $team = AclTeam::create(['name' => 'Base']);
+        $user = User::factory()->create();
+        $team->syncTeamRoles(['viewer']);
+        $team->addUser($user);
+
+        $sync = $this->app->make(AccessSync::class);
+        $synced = null;
+
+        // A request rebuilds the member just before the delete commits, and stores its sync time.
+        DB::listen(function ($query) use ($sync, $user, &$synced): void {
+            if ($synced === null && str_contains($query->sql, 'delete from') && str_contains($query->sql, 'model_has_roles')) {
+                $this->travel(2)->seconds();
+                $synced = Date::now()->format(Teams::DATE_FORMAT);
+                $sync->rememberSynced($user, 'key', $synced);
+            }
+        });
+
+        $this->travel(1)->seconds();
+        $sync->markChanged($team);
+
+        $changed = DB::table(Teams::ORGANIZATIONS_TABLE)->where(Teams::userPivotKey(), $user->id)->value('updated_at');
+
+        $this->assertNotNull($synced);
+        $this->assertTrue($sync->isStale($synced, $changed));
     }
 }
