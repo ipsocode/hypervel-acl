@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Ipsocode\Acl\Contracts;
 
 use Hypervel\Database\Eloquent\Model;
+use Ipsocode\Acl\Workspace;
 
 /**
  * The team model named in acl.models.team. A team is an organizational role: one set of
@@ -46,12 +47,12 @@ interface Team
     public function syncTeamRoles(array $names): void;
 
     /**
-     * Add a user to the team, giving the user the team's roles.
+     * Add a user to the team, giving the user the team's roles, in a workspace when workspaces are on.
      */
-    public function addUser(Model $user): void;
+    public function addUser(Model $user, int|string $workspace = Workspace::HOME): void;
 
     /**
-     * Remove a user from the team, taking the team's roles away.
+     * Remove a user from the team, taking the team's roles away, in one workspace or all.
      */
-    public function removeUser(Model $user): void;
+    public function removeUser(Model $user, int|string|null $workspace = null): void;
 }

@@ -15,9 +15,14 @@ return [
     | "teams_inherit_id" column, which holds the key of another row of the same table.
     */
 
+    /*
+    | "workspace" is the model of the workspace tree, used when "workspace" below is
+    | true: either the package's Ipsocode\Acl\Models\AclWorkspace or your own with a
+    | parent column. Leave it null for flat workspaces the application identifies itself.
+    */
+
     'models' => [
         'team' => config('permission.models.team'),
-        // The model used when raw ids are passed to reverse-assignment helpers.
         'workspace' => null,
     ],
 
@@ -25,6 +30,10 @@ return [
     |--------------------------------------------------------------------------
     | Table Names
     |--------------------------------------------------------------------------
+    |
+    | "workspace" is the table of the package's workspace model; leave it null for
+    | "acl_workspaces".
+    |
     */
 
     'table_names' => [
@@ -36,20 +45,23 @@ return [
     | Column Names
     |--------------------------------------------------------------------------
     |
-    | "workspace" is the column that partitions hypervel/permission's tables; every
-    | workspace is a partition the application identifies itself. "tenant_foreign_key"
-    | is the column of the team table that holds the tenant a team belongs to; leave
-    | it null for a single tenant. A user is in one team per tenant.
+    | "workspace_foreign_key" is the column that partitions hypervel/permission's tables when
+    | "workspace" below is true; workspace 0 is the home workspace. "workspace_parent"
+    | is the column of the workspace model that holds the workspace it is beneath.
+    | "tenant_foreign_key" is the column of the team table that holds the tenant a team
+    | belongs to; leave it null for a single tenant. A user is in one team per tenant.
     |
     */
 
     'column_names' => [
-        'workspace' => null,
+        'workspace_foreign_key' => 'workspace_id',
+        'workspace_parent' => 'parent_id',
         'teams_inherit_key' => 'inherit_id',
         'tenant_foreign_key' => null,
         'team_foreign_key' => config('permission.column_names.team_foreign_key', 'acl_team_id'),
     ],
 
+    // Partition the permission tables by workspace, with a Globals team per tenant.
     'workspace' => false,
     'tenant' => false,
 

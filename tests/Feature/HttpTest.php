@@ -98,7 +98,8 @@ class HttpTest extends TestCase
         $this->postJson("acl/teams/{$this->admins->id}/users", ['user_id' => $user->id])->assertUnprocessable();
         $this->postJson("acl/teams/{$ops->id}/users", [])->assertUnprocessable();
 
-        $this->deleteJson("acl/teams/{$ops->id}/users/{$user->id}")->assertNoContent();
+        // With workspaces off the parameter has nothing to name.
+        $this->deleteJson("acl/teams/{$ops->id}/users/{$user->id}?workspace=5")->assertNoContent();
         $this->getJson("acl/teams/{$ops->id}/users")->assertOk()->assertJsonPath('data', []);
     }
 

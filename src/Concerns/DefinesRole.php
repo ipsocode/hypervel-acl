@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Ipsocode\Acl\Concerns;
 
 use Ipsocode\Acl\Contracts\RoleDefinition;
+use Ipsocode\Acl\Support\Config;
 
 trait DefinesRole
 {
@@ -13,7 +14,7 @@ trait DefinesRole
      */
     public function guard(): string
     {
-        return config('acl.guards')[0];
+        return Config::guards()[0];
     }
 
     /**
