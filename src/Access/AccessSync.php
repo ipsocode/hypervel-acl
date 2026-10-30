@@ -109,13 +109,17 @@ class AccessSync
 
         $partitions = $this->partitions(clone $rows);
 
-        $rows->delete();
+        // The times are bumped before the roles are deleted, and in one transaction: a member who
+        // reads the old time never finds the roles gone, so no session is marked fresh without them.
+        DB::transaction(function () use ($keys, $now, $model, $rows): void {
+            DB::table(Teams::ORGANIZATIONS_TABLE)->whereIn(Teams::teamPivotKey(), $keys)->update(['updated_at' => $now]);
 
-        DB::table(Teams::ORGANIZATIONS_TABLE)->whereIn(Teams::teamPivotKey(), $keys)->update(['updated_at' => $now]);
+            // The model's own date format keeps the milliseconds a bulk touch() would round away.
+            Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($keys)->toBase()
+                ->update([$model->getUpdatedAtColumn() => $model->freshTimestampString()]);
 
-        // The model's own date format keeps the milliseconds a bulk touch() would round away.
-        Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($keys)->toBase()
-            ->update([$model->getUpdatedAtColumn() => $model->freshTimestampString()]);
+            $rows->delete();
+        });
 
         $this->forgetCachedPermissions($keys, $partitions);
     }
