@@ -182,7 +182,7 @@ class TeamTest extends TestCase
 
             $count = 0;
             DB::listen(function () use (&$count): void {
-                $count++;
+                ++$count;
             });
 
             $team->delete();

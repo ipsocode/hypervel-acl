@@ -39,7 +39,6 @@ class WorkspaceRequest extends FormRequest
      * Fail a name another workspace of the same tenant and parent already has, as the unique index
      * would; a workspace at the top has no parent, which the index does not compare.
      *
-     * @param null|int|string $current
      * @param Closure(string): mixed $fail
      */
     protected function name(mixed $name, int|string|null $current, Closure $fail): void
