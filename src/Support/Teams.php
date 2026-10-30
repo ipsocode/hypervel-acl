@@ -20,6 +20,11 @@ class Teams
      */
     public const GLOBALS = 'Globals';
 
+    /**
+     * The name of the tenant scope, which `BelongsToTenant` registers and the unscoped queries remove.
+     */
+    public const TENANT_SCOPE = 'acl_tenant';
+
     public const DEFAULT_TEAM_PIVOT_KEY = 'team_id';
 
     public const DEFAULT_USER_PIVOT_KEY = 'user_id';
@@ -96,7 +101,7 @@ class Teams
         $column = static::tenantColumn();
         $tenant ??= Tenant::id();
 
-        $query = static::query()->withoutGlobalScope('acl_tenant');
+        $query = static::query()->withoutGlobalScope(self::TENANT_SCOPE);
         $attributes = ['name' => self::GLOBALS, ...($column === null ? [] : [$column => $tenant])];
 
         // Concurrent first calls can both miss, so a lost insert reads back the row that won.

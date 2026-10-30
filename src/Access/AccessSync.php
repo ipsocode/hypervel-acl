@@ -191,7 +191,7 @@ class AccessSync
         DB::table(Teams::ORGANIZATIONS_TABLE)->whereIn(Teams::teamPivotKey(), $keys)->update(['updated_at' => Date::now()->format(Teams::DATE_FORMAT)]);
 
         // The model's own date format keeps the milliseconds a bulk touch() would round away.
-        Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($keys)->toBase()
+        Teams::query()->withoutGlobalScope(Teams::TENANT_SCOPE)->whereKey($keys)->toBase()
             ->update([$model->getUpdatedAtColumn() => $model->freshTimestampString()]);
     }
 
@@ -221,7 +221,7 @@ class AccessSync
 
         $tenants = $column === null
             ? [null]
-            : Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($keys)->distinct()->pluck($column)->all();
+            : Teams::query()->withoutGlobalScope(Teams::TENANT_SCOPE)->whereKey($keys)->distinct()->pluck($column)->all();
 
         foreach ($tenants as $tenant) {
             foreach ($partitions as $partition) {
@@ -265,7 +265,7 @@ class AccessSync
 
             // Unscoped, so the cached list is the same whichever tenant builds it.
             while ($queue !== []) {
-                foreach (Teams::query()->withoutGlobalScope('acl_tenant')->where($column, array_pop($queue))->pluck($team->getKeyName()) as $key) {
+                foreach (Teams::query()->withoutGlobalScope(Teams::TENANT_SCOPE)->where($column, array_pop($queue))->pluck($team->getKeyName()) as $key) {
                     if (! isset($seen[(string) $key])) {
                         $seen[(string) $key] = true;
                         $queue[] = $key;
@@ -288,7 +288,7 @@ class AccessSync
      */
     public function forgetDependentsAbove(int|string|null $key): void
     {
-        $team = $key === null ? null : Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($key)->first();
+        $team = $key === null ? null : Teams::query()->withoutGlobalScope(Teams::TENANT_SCOPE)->whereKey($key)->first();
 
         if ($team === null) {
             return;
@@ -342,7 +342,7 @@ class AccessSync
             $seen = [(string) $team->getKey() => true];
 
             // Unscoped, so the cached chain is the same whichever tenant builds it.
-            for ($parent = $team->getAttribute($column); $parent !== null && ! isset($seen[(string) $parent]); $parent = Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($parent)->value($column)) {
+            for ($parent = $team->getAttribute($column); $parent !== null && ! isset($seen[(string) $parent]); $parent = Teams::query()->withoutGlobalScope(Teams::TENANT_SCOPE)->whereKey($parent)->value($column)) {
                 $seen[(string) $parent] = true;
                 $chain[] = $parent;
             }
