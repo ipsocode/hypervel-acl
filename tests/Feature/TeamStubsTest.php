@@ -76,6 +76,13 @@ class TeamStubsTest extends TestCase
         foreach (['roles', 'permissions', 'model_has_roles', 'model_has_permissions', 'role_has_permissions', 'app_teams'] as $table) {
             $this->assertTrue(Schema::hasColumn($table, 'tenant'), $table);
         }
+
+        foreach (['roles', 'permissions'] as $table) {
+            $unique = array_values(array_filter(Schema::getIndexes($table), fn (array $index) => $index['unique'] && ! $index['primary'] && in_array('guard_name', $index['columns'], true)));
+
+            $this->assertCount(1, $unique, $table);
+            $this->assertSame('tenant', $unique[0]['columns'][0], $table);
+        }
     }
 
     public function testTenantsOnWithoutAColumnFailLikeTheFrameworkDoes(): void

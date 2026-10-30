@@ -247,4 +247,17 @@ class TenantTest extends TestCase
         $this->getJson("acl/teams/{$foreign->id}")->assertNotFound();
         $this->postJson('acl/teams', ['name' => 'Bad', 'inherit_id' => $foreign->id])->assertUnprocessable();
     }
+
+    public function testTheSameCatalogCanBeSeededForEveryTenant(): void
+    {
+        foreach (['acme', 'globex'] as $tenant) {
+            Tenant::run($tenant, fn () => (new AclSeeder)->run());
+        }
+
+        foreach (['acme', 'globex'] as $tenant) {
+            $this->assertTrue(Tenant::run($tenant, fn () => Role::query()->where('name', 'viewer')->where('tenant', $tenant)->exists()), $tenant);
+        }
+
+        $this->assertSame(2, Role::query()->withoutGlobalScopes()->where('name', 'viewer')->count());
+    }
 }

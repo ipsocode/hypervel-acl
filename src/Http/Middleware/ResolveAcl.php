@@ -94,7 +94,7 @@ class ResolveAcl
                 if ($session === null) {
                     $this->sync->rememberSynced($user, $key, $times[$key]);
                 } else {
-                    $session->put(self::SESSION_KEY, ['team' => $membership->team, 'at' => $times]);
+                    $session->put(self::SESSION_KEY, ['at' => $times]);
                 }
             }
         }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Ipsocode\Acl\Console;
 
 use Hypervel\Console\Command;
+use Hypervel\Permission\Support\Config as PermissionConfig;
 use Hypervel\Support\Facades\Date;
 use Hypervel\Support\Facades\File;
 use Hypervel\Support\Facades\Schema;
@@ -25,7 +26,7 @@ class SetupCommand extends Command
      */
     public function handle(): int
     {
-        $teamKey = config('permission.column_names.team_foreign_key') ?? 'team_id';
+        $teamKey = PermissionConfig::teamForeignKey();
         $roles = config('permission.table_names.roles');
 
         if (Schema::hasTable($roles) && ! Schema::hasColumn($roles, $teamKey)) {
