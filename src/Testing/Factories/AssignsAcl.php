@@ -8,24 +8,23 @@ use Hypervel\Database\Eloquent\Model;
 use Hypervel\Permission\PermissionRegistrar;
 use Ipsocode\Acl\Contracts\Team;
 use LogicException;
-use stdClass;
 
 /**
  * States for a user factory that assign roles and teams.
  */
 trait AssignsAcl
 {
-    protected ?stdClass $aclScope = null;
+    protected ?Model $aclTeam = null;
 
     /**
      * Assign roles directly, under the team set by inTeam(), after the model is created.
      */
     public function role(string ...$roles): static
     {
-        $scope = $this->aclScope();
+        $team = $this->aclTeam;
 
-        return $this->afterCreating(function ($model) use ($scope, $roles): void {
-            app(PermissionRegistrar::class)->setPermissionsTeamId($this->aclTeamFor($scope));
+        return $this->afterCreating(function ($model) use ($team, $roles): void {
+            app(PermissionRegistrar::class)->setPermissionsTeamId($this->aclTeamFor($team));
 
             $model->assignRole(...$roles); // @phpstan-ignore method.notFound (the model uses HasRoles)
         });
@@ -36,10 +35,10 @@ trait AssignsAcl
      */
     public function member(): static
     {
-        $scope = $this->aclScope();
+        $team = $this->aclTeam;
 
-        return $this->afterCreating(function ($model) use ($scope): void {
-            $this->aclTeamFor($scope)->addUser($model);
+        return $this->afterCreating(function ($model) use ($team): void {
+            $this->aclTeamFor($team)->addUser($model);
         });
     }
 
@@ -48,22 +47,18 @@ trait AssignsAcl
      */
     public function inTeam(Model $team): static
     {
-        $this->aclScope()->team = $team;
+        $instance = $this->newInstance();
+        $instance->aclTeam = $team;
 
-        return $this->newInstance();
-    }
-
-    protected function aclScope(): stdClass
-    {
-        return $this->aclScope ??= new stdClass;
+        return $instance;
     }
 
     /**
      * @return Model&Team
      */
-    protected function aclTeamFor(stdClass $scope): Team
+    protected function aclTeamFor(?Model $team): Team
     {
-        return $scope->team ?? throw new LogicException('Assigning roles needs a team: use inTeam().');
+        return $team ?? throw new LogicException('Assigning roles needs a team: use inTeam().');
     }
 
     /**
@@ -72,7 +67,7 @@ trait AssignsAcl
     protected function newInstance(array $arguments = []): static
     {
         $instance = parent::newInstance($arguments);
-        $instance->aclScope = $this->aclScope;
+        $instance->aclTeam = $this->aclTeam;
 
         return $instance;
     }
