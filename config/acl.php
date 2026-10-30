@@ -119,4 +119,59 @@ return [
         'name' => 'acl.',
         'permissions' => [],
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | UI
+    |--------------------------------------------------------------------------
+    |
+    | The management UI loads only when enabled. "frontend" is "bundled" for the
+    | package's own React app, prebuilt and served from the published acl-assets;
+    | "react" for the same pages as Inertia pages, published into your application
+    | with the acl-react tag; or null for the API only. Keep "path" apart from
+    | the API's "routes.prefix".
+    |
+    */
+
+    /*
+    |--------------------------------------------------------------------------
+    | UI Domain
+    |--------------------------------------------------------------------------
+    |
+    | This is the subdomain where the ACL management UI will be accessible from.
+    | If the setting is null, the UI will reside under the same domain as the
+    | application. Otherwise, this value will be used as the subdomain.
+    |
+    */
+
+    /*
+    |--------------------------------------------------------------------------
+    | UI Path
+    |--------------------------------------------------------------------------
+    |
+    | This is the URI path where the UI will be accessible from. Feel free to
+    | change it to anything you like. Note that the URI will not affect the
+    | paths of its internal API that aren't exposed to users.
+    |
+    */
+
+    /*
+    |--------------------------------------------------------------------------
+    | UI Route Middleware
+    |--------------------------------------------------------------------------
+    |
+    | These middleware are assigned to every UI route, its internal API
+    | included. The permission check enforces "ui.permission" and should only
+    | be removed if you replace it with your own.
+    |
+    */
+
+    'ui' => [
+        'enabled' => (bool) env('ACL_UI_ENABLED', false),
+        'frontend' => env('ACL_UI_FRONTEND', 'bundled'),
+        'domain' => env('ACL_UI_DOMAIN'),
+        'path' => env('ACL_UI_PATH', 'acl-admin'),
+        'middleware' => ['web', 'auth'],
+        'permission' => 'acl.ui',
+    ],
 ];

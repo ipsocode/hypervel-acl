@@ -11,6 +11,7 @@ use Hypervel\Permission\Events\RoleDetachedEvent;
 use Hypervel\Permission\PermissionRegistrar;
 use Hypervel\Support\Facades\DB;
 use Hypervel\Support\Facades\Event;
+use Hypervel\Support\Facades\Route;
 use Hypervel\Support\ServiceProvider;
 use Ipsocode\Acl\Access\AccessSync;
 use Ipsocode\Acl\Console\MakeAclSeederCommand;
@@ -18,8 +19,10 @@ use Ipsocode\Acl\Console\SetupCommand;
 use Ipsocode\Acl\Contracts\Team;
 use Ipsocode\Acl\Contracts\WorkspaceResolver;
 use Ipsocode\Acl\Events\OrgRoleAdding;
+use Ipsocode\Acl\Http\Middleware\ResolveAcl;
 use Ipsocode\Acl\Listeners\EnsureOrgRolesAreUnrelated;
 use Ipsocode\Acl\Permission\TenantPermissionRegistrar;
+use Ipsocode\Acl\Support\Config;
 use Ipsocode\Acl\Support\Teams;
 use Ipsocode\Acl\Support\Workspaces;
 use Ipsocode\Acl\Workspaces\RequestWorkspaceResolver;
@@ -60,6 +63,9 @@ class AclServiceProvider extends ServiceProvider
                 __DIR__ . '/../database/migrations/2026_10_29_000005_create_acl_team_workspace_user_table.php' => database_path('migrations/2026_10_29_000005_create_acl_team_workspace_user_table.php'),
             ], 'acl-migrations');
 
+            $this->publishes([__DIR__ . '/../dist' => public_path('vendor/acl')], 'acl-assets');
+            $this->publishes([__DIR__ . '/../resources/js' => resource_path('js/pages/acl')], 'acl-react');
+
             $this->commands([MakeAclSeederCommand::class, SetupCommand::class]);
 
             $this->registerConsoleOptions();
@@ -85,6 +91,33 @@ class AclServiceProvider extends ServiceProvider
         if ($this->app->get('config')->get('acl.routes.enabled')) {
             $this->loadRoutesFrom(__DIR__ . '/../routes/acl.php');
         }
+
+        if (Config::uiEnabled()) {
+            $this->registerUi();
+        }
+    }
+
+    /**
+     * Register the management UI: its views and its routes, under their own path and middleware.
+     */
+    protected function registerUi(): void
+    {
+        $config = $this->app->get('config');
+
+        $this->loadViewsFrom(__DIR__ . '/../resources/views', 'acl');
+
+        // ResolveAcl comes first: the permission check reads the team and roles it sets.
+        Route::middlewareGroup('acl', [
+            ...$config->array('acl.ui.middleware'),
+            ResolveAcl::class,
+            'permission:' . $config->string('acl.ui.permission'),
+        ]);
+
+        Route::domain($config->get('acl.ui.domain'))
+            ->middleware('acl')
+            ->prefix($config->string('acl.ui.path'))
+            ->name('acl.ui.')
+            ->group(__DIR__ . '/../routes/web.php');
     }
 
     /**

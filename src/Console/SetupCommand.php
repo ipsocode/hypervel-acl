@@ -8,6 +8,8 @@ use Hypervel\Console\Command;
 use Hypervel\Support\Facades\Date;
 use Hypervel\Support\Facades\File;
 use Hypervel\Support\Facades\Schema;
+use Ipsocode\Acl\Support\Config;
+use Ipsocode\Acl\Support\Frontend;
 use Ipsocode\Acl\Support\Teams;
 use Ipsocode\Acl\Support\Workspaces;
 use SplFileInfo;
@@ -16,7 +18,7 @@ class SetupCommand extends Command
 {
     protected ?string $signature = 'acl:setup';
 
-    protected string $description = 'Generate the migrations the permission tables and teams need';
+    protected string $description = 'Generate the migrations the permission tables and teams need, and publish the bundled UI assets';
 
     /**
      * Execute the console command.
@@ -30,6 +32,11 @@ class SetupCommand extends Command
             $this->error('The permission tables have no team columns: run permission:setup-teams and migrate first.');
 
             return self::FAILURE;
+        }
+
+        // The bundled UI's assets are refreshed on every run: a package update changes them.
+        if (Config::uiEnabled() && Config::uiFrontend() === Frontend::Bundled) {
+            $this->call('vendor:publish', ['--tag' => 'acl-assets', '--force' => true]);
         }
 
         $stubs = $this->teamStubs();

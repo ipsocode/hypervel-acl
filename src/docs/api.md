@@ -10,3 +10,5 @@ Set `acl.routes.enabled` to mount the role, permission and team controllers. Eac
 | `GET/POST teams/{id}/users`, `DELETE teams/{id}/users/{user}` | List, add and remove members; 422 when the user is in another team of the tenant |
 
 Roles made through the API are global.
+
+To manage roles, teams and workspaces from a browser, enable [the management UI](ui.md); it carries its own copy of these routes, so this API can stay off.
