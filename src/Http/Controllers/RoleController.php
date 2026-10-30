@@ -12,9 +12,13 @@ use Symfony\Component\HttpFoundation\Response;
 
 class RoleController extends Controller
 {
+    public function __construct(protected PermissionRegistrar $registrar)
+    {
+    }
+
     public function index(): Response
     {
-        return RoleResource::collection(app(PermissionRegistrar::class)->getRoleClass()::query()->orderBy('name')->get())->response();
+        return RoleResource::collection($this->registrar->getRoleClass()::query()->orderBy('name')->get())->response();
     }
 
     public function store(Request $request): Response
@@ -22,19 +26,19 @@ class RoleController extends Controller
         $data = $request->validate(['name' => ['required', 'string'], 'guard_name' => ['sometimes', 'string']]);
 
         // A role made through the API is a system role: global, so every team can hold it.
-        $data[app(PermissionRegistrar::class)->teamsKey] = null;
+        $data[$this->registrar->teamsKey] = null;
 
-        return (new RoleResource(app(PermissionRegistrar::class)->getRoleClass()::create($data)))->response()->setStatusCode(201);
+        return (new RoleResource($this->registrar->getRoleClass()::create($data)))->response()->setStatusCode(201);
     }
 
     public function show(int|string $role): Response
     {
-        return (new RoleResource(app(PermissionRegistrar::class)->getRoleClass()::query()->with('permissions')->findOrFail($role)))->response();
+        return (new RoleResource($this->registrar->getRoleClass()::query()->with('permissions')->findOrFail($role)))->response();
     }
 
     public function update(Request $request, int|string $role): Response
     {
-        $role = app(PermissionRegistrar::class)->getRoleClass()::query()->findOrFail($role);
+        $role = $this->registrar->getRoleClass()::query()->findOrFail($role);
         $role->update($request->validate(['name' => ['required', 'string']]));
 
         return (new RoleResource($role))->response();
@@ -42,7 +46,7 @@ class RoleController extends Controller
 
     public function destroy(int|string $role): Response
     {
-        app(PermissionRegistrar::class)->getRoleClass()::query()->findOrFail($role)->delete();
+        $this->registrar->getRoleClass()::query()->findOrFail($role)->delete();
 
         return response()->noContent();
     }
@@ -56,7 +60,7 @@ class RoleController extends Controller
             'denied.*' => ['string'],
         ]);
 
-        $role = app(PermissionRegistrar::class)->getRoleClass()::query()->findOrFail($role);
+        $role = $this->registrar->getRoleClass()::query()->findOrFail($role);
         $role->syncPermissionEffects(allowed: $data['allowed'], denied: $data['denied'] ?? []);
 
         return (new RoleResource($role->load('permissions')))->response();

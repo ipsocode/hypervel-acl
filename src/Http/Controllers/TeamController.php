@@ -28,7 +28,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class TeamController extends Controller
 {
-    public function __construct(protected PermissionRegistrar $registrar)
+    public function __construct(protected PermissionRegistrar $registrar, protected Reach $reach)
     {
     }
 
@@ -39,7 +39,7 @@ class TeamController extends Controller
 
     public function store(TeamRequest $request): Response
     {
-        $team = Teams::query()->create($this->attributes($request));
+        $team = Teams::query()->create($this->attributes($request, $this->tenant()));
 
         return (new TeamResource($team))->response()->setStatusCode(201);
     }
@@ -51,8 +51,9 @@ class TeamController extends Controller
 
     public function update(TeamRequest $request, int|string $team): Response
     {
-        $team = $this->teams()->findOrFail($team);
-        $team->update($this->attributes($request));
+        $tenant = $this->tenant();
+        $team = $this->teamsOf($tenant)->findOrFail($team);
+        $team->update($this->attributes($request, $tenant));
 
         return (new TeamResource($team))->response();
     }
@@ -61,7 +62,7 @@ class TeamController extends Controller
     {
         $team = $this->teams()->findOrFail($team);
 
-        abort_if(Teams::query()->withoutGlobalScope('acl_tenant')->where(Config::teamsInheritKey(), $team->getKey())->exists(), 409, 'The team is inherited by other teams.');
+        abort_if(Teams::query()->withoutGlobalScope(Teams::TENANT_SCOPE)->where(Config::teamsInheritKey(), $team->getKey())->exists(), 409, 'The team is inherited by other teams.');
 
         $team->delete();
 
@@ -92,7 +93,7 @@ class TeamController extends Controller
         $user = $this->userModel()::query()->whereKey($input['user_id'])->firstOrFail();
         $workspace = $input['workspace'] ?? Workspace::id();
 
-        if (Workspaces::enabled() && ! app(Reach::class)->reaches($workspace)) {
+        if (Workspaces::enabled() && ! $this->reach->reaches($workspace)) {
             throw ValidationException::withMessages(['workspace' => 'The workspace is not one the org role covers.']);
         }
 
@@ -115,7 +116,7 @@ class TeamController extends Controller
         } elseif ($request->filled('workspace')) {
             $workspace = $request->string('workspace')->toString();
 
-            if (! app(Reach::class)->covers(Workspace::id(), $workspace)) {
+            if (! $this->reach->covers(Workspace::id(), $workspace)) {
                 throw ValidationException::withMessages(['workspace' => 'The workspace is not one the org role covers.']);
             }
 
@@ -177,7 +178,15 @@ class TeamController extends Controller
     {
         return DB::table(Teams::ORGANIZATIONS_TABLE)
             ->where(Teams::teamPivotKey(), $team->getKey())
-            ->whereIn(Workspaces::column(), app(Reach::class)->beneath(Workspace::id()));
+            ->whereIn(Workspaces::column(), $this->reach->beneath(Workspace::id()));
+    }
+
+    /**
+     * Get the tenant of the current team, or null with tenants off.
+     */
+    protected function tenant(): int|string|null
+    {
+        return Teams::tenantColumn() === null ? null : Teams::query()->find($this->registrar->getPermissionsTeamId())?->tenant();
     }
 
     /**
@@ -187,10 +196,20 @@ class TeamController extends Controller
      */
     protected function teams(): Builder
     {
+        return $this->teamsOf($this->tenant());
+    }
+
+    /**
+     * Get the teams of a tenant.
+     *
+     * @return Builder<Model&Team>
+     */
+    protected function teamsOf(int|string|null $tenant): Builder
+    {
         $query = Teams::query();
         $column = Teams::tenantColumn();
 
-        return $column === null ? $query : $query->where($column, Teams::query()->find($this->registrar->getPermissionsTeamId())?->tenant());
+        return $column === null ? $query : $query->where($column, $tenant);
     }
 
     /**
@@ -198,13 +217,13 @@ class TeamController extends Controller
      *
      * @return array<string, mixed>
      */
-    protected function attributes(TeamRequest $request): array
+    protected function attributes(TeamRequest $request, int|string|null $tenant): array
     {
         $attributes = $request->validated();
         $column = Teams::tenantColumn();
 
         if ($column !== null) {
-            $attributes[$column] = Teams::query()->find($this->registrar->getPermissionsTeamId())?->tenant();
+            $attributes[$column] = $tenant;
         }
 
         return $attributes;
