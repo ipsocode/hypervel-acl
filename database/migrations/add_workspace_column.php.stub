@@ -7,6 +7,9 @@ use Hypervel\Database\Schema\Blueprint;
 use Hypervel\Permission\PermissionRegistrar;
 use Hypervel\Support\Facades\DB;
 use Hypervel\Support\Facades\Schema;
+use Hypervel\Permission\Guard;
+use Ipsocode\Acl\Support\Config;
+use Ipsocode\Acl\Support\Teams;
 use Ipsocode\Acl\Support\Workspaces;
 
 return new class extends Migration {
@@ -15,7 +18,8 @@ return new class extends Migration {
      *
      * With acl.workspace on, adds the partition column to the five permission tables, wherever
      * it is missing, and puts it first in their keys, as the framework's partitioned schema
-     * does. Existing rows land in the home workspace.
+     * does, and to the org role table, where a user may then hold a row in each workspace.
+     * Existing rows land in the home workspace.
      */
     public function up(): void
     {
@@ -125,6 +129,8 @@ return new class extends Migration {
             });
         }
 
+        $this->partitionOrganizations($column);
+
         $cacheStore = config()->string('permission.cache.store', 'default');
         $cache = app('cache')->store($cacheStore !== 'default' ? $cacheStore : null);
 
@@ -132,6 +138,57 @@ return new class extends Migration {
 
         // A new assignment token stops checks from reading assignments cached before partitioning.
         $cache->forget(config()->string('permission.cache.keys.model_token', PermissionRegistrar::MODEL_CACHE_TOKEN_KEY));
+    }
+
+    /**
+     * Add the partition column to the org role table and key it by workspace, team and user.
+     */
+    protected function partitionOrganizations(string $column): void
+    {
+        $table = Teams::ORGANIZATIONS_TABLE;
+
+        if (! Schema::hasTable($table) || Schema::hasColumn($table, $column)) {
+            return;
+        }
+
+        $teamModel = Teams::model();
+        $userModel = Guard::getModelForGuard(Config::guards()[0]);
+        $team = new $teamModel;
+        $user = new $userModel;
+        $pivotTeam = Teams::teamPivotKey();
+        $pivotUser = Teams::userPivotKey();
+        $tenant = Teams::tenantColumn();
+        $oneTeamPerUser = $tenant === null ? [$pivotUser] : [$tenant, $pivotUser];
+        $unique = null;
+
+        foreach (Schema::getIndexes($table) as $index) {
+            if ($index['unique'] && ! $index['primary'] && $index['columns'] === $oneTeamPerUser) {
+                $unique = $index['name'];
+            }
+        }
+
+        Schema::table($table, static function (Blueprint $blueprint) use ($table, $column, $team, $user, $pivotTeam, $pivotUser, $unique): void {
+            Workspaces::addColumn($blueprint);
+
+            if (DB::getDriverName() !== 'sqlite') {
+                $blueprint->dropForeign([$pivotTeam]);
+                $blueprint->dropForeign([$pivotUser]);
+            }
+
+            if ($unique !== null) {
+                $blueprint->dropUnique($unique);
+            }
+
+            $blueprint->dropPrimary();
+
+            $blueprint->primary([$column, $pivotTeam, $pivotUser], $table . '_workspace_team_user_primary');
+            $blueprint->index([$pivotUser, $column]);
+
+            if (DB::getDriverName() !== 'sqlite') {
+                $blueprint->foreign($pivotTeam)->references($team->getKeyName())->on($team->getTable())->cascadeOnDelete();
+                $blueprint->foreign($pivotUser)->references($user->getKeyName())->on($user->getTable())->cascadeOnDelete();
+            }
+        });
     }
 
     /**
