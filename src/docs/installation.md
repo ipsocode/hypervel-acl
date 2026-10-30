@@ -41,7 +41,7 @@ An interactive `acl:*` command also offers to take the missing step itself. When
 php artisan acl:status
 ```
 
-`--only` limits the report to a feature, `tenant` or `workspace`, and may be given more than once. A limited report keeps the permission package line and its problem, and otherwise shows only the settings, migrations and problems of the features it names, so a CI step can check one feature alone. The option is not called `--workspace`, which every command already takes to name the workspace it runs in:
+`--only` limits the report to a feature, `tenant` or `workspace`, and may be given more than once. A limited report keeps the permission package line and its problem, and otherwise shows only the settings, migrations and problems of the features it names, so a CI step can check one feature alone. It still reports a key type that disagrees with the permissions table and a missing or mismatched users table, and fails on them, since every feature's migrations build on those tables. The option is not called `--workspace`, which every command already takes to name the workspace it runs in:
 
 ```sh
 php artisan acl:status --only=tenant

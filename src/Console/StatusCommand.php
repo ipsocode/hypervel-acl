@@ -34,7 +34,8 @@ class StatusCommand extends Command
      *
      * Each setting, migration and problem belongs to a section: the permission package's is always
      * reported, a feature's when the report is not limited or is limited to it, and the rest only
-     * when it is not limited.
+     * when it is not limited. The general problems are reported either way: the key type and the
+     * users table decide the tables every feature's migrations build on.
      */
     public function handle(): int
     {
@@ -91,7 +92,7 @@ class StatusCommand extends Command
             ...array_map(fn (string $stub) => [$this->stubSection($stub), $stub, $this->published($stub)], $stubs),
         ]));
 
-        $problems = array_values(array_filter($problems, $shown));
+        $problems = array_values(array_filter($problems, fn (array $problem): bool => $problem[0] === 'general' || $shown($problem)));
 
         foreach ($problems as [, $problem]) {
             $this->error($problem);
