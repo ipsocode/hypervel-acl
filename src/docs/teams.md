@@ -1,6 +1,6 @@
 # Teams
 
-A team is an organizational role: one set of the global roles, held by every member of the team. Membership is kept in the `acl_team_user` table, whose `team_id` and `user_id` columns you may rename with `acl.column_names.team_pivot_key` and `acl.column_names.user_pivot_key`. The package uses the framework's teams feature to give members the team's roles as assignments with `team_id = T`, and checks see the roles of the current team only.
+A team is an organizational role: one set of the global roles, held by every member of the team. Membership is kept in the `acl_organizations` table, whose `team_id` and `user_id` columns you may rename with `acl.column_names.team_pivot_key` and `acl.column_names.user_pivot_key`. The package uses the framework's teams feature to give members the team's roles as assignments with `team_id = T`, and checks see the roles of the current team only.
 
 ```php
 $ops = AclTeam::create(['name' => 'Ops']);
@@ -18,7 +18,7 @@ Use `Ipsocode\Acl\Models\AclTeam`, or add `IsTeam` to your own model (and implem
 A change to a team's roles applies to the team and to every team that inherits it, in bulk:
 
 - the members' roles under those teams are deleted, so a removed role is gone at once;
-- `updated_at` is set on those teams and, to the millisecond, on their `acl_team_user` rows;
+- `updated_at` is set on those teams and, to the millisecond, on their `acl_organizations` rows;
 - the permission cache of each affected tenant is cleared.
 
 When `ResolveAcl` builds a member's roles, it stores the time in the member's session. On the member's next request, a membership updated at or after that time is rebuilt for that one member. A team with many members is never rebuilt all at once.

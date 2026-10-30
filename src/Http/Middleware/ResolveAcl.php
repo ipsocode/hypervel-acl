@@ -60,7 +60,7 @@ class ResolveAcl
 
             $tenant = Teams::tenantColumn();
 
-            $memberships = DB::table(Teams::membersTable())
+            $memberships = DB::table(Teams::ORGANIZATIONS_TABLE)
                 ->where(Teams::userPivotKey(), $user->getKey())
                 ->when($tenant !== null && Tenant::check(), fn ($query) => $query->where(
                     fn ($query) => $query->whereNull($tenant)->orWhere($tenant, Tenant::id())
