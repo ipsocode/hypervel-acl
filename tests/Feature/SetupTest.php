@@ -108,7 +108,10 @@ class SetupTest extends TestCase
     public function testSetupFailsWithAnActionableMessageWhenThePermissionPackageIsNotActive(): void
     {
         config(['permission.teams' => false]);
-        $this->artisan('acl:setup')->expectsOutputToContain('permission:setup-teams')->assertExitCode(1);
+        $this->artisan('acl:setup')
+            ->expectsOutputToContain('permission:setup-teams')
+            ->expectsConfirmation('Publish the permission config now?', 'no')
+            ->assertExitCode(1);
 
         config(['permission.teams' => true, 'permission.table_names.roles' => null]);
         $this->artisan('acl:setup', ['--no-interaction' => true])->expectsOutputToContain('--tag=permission-config')->assertExitCode(1);
@@ -231,5 +234,79 @@ class SetupTest extends TestCase
             $original === null ? @unlink($path) : file_put_contents($path, $original);
             array_map('unlink', array_diff(glob(database_path('migrations/*')), $before));
         }
+    }
+
+    public function testSetupPublishesThePermissionConfigAndTurnsOnItsTeams(): void
+    {
+        config(['permission.teams' => false]);
+        $path = config_path('permission.php');
+
+        try {
+            $this->artisan('acl:setup')
+                ->expectsConfirmation('Publish the permission config now?', 'yes')
+                ->expectsConfirmation('Turn on teams in config/permission.php?', 'yes')
+                ->expectsOutputToContain("'teams' was set to true")
+                ->expectsOutputToContain('run this command again')
+                ->assertExitCode(1);
+            $this->assertStringContainsString("'teams' => true,", file_get_contents($path));
+
+            // A config already published is not published again, and teams not false there are left alone.
+            $this->artisan('acl:setup')
+                ->expectsConfirmation('Turn on teams in config/permission.php?', 'yes')
+                ->expectsOutputToContain("Set 'teams' => true")
+                ->assertExitCode(1);
+
+            file_put_contents($path, str_replace("'teams' => true,", "'teams' => false,", file_get_contents($path)));
+            $this->artisan('acl:setup')
+                ->expectsConfirmation('Turn on teams in config/permission.php?', 'no')
+                ->assertExitCode(1);
+            $this->assertStringContainsString("'teams' => false,", file_get_contents($path));
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    public function testSetupNeverOffersThePermissionSetupUnderPretendOrNoInteraction(): void
+    {
+        config(['permission.teams' => false]);
+
+        $this->artisan('acl:setup', ['--pretend' => true])->expectsOutputToContain('permission:setup-teams')->assertExitCode(1);
+        $this->artisan('acl:setup', ['--no-interaction' => true])->expectsOutputToContain('permission:setup-teams')->assertExitCode(1);
+
+        $this->assertFileDoesNotExist(config_path('permission.php'));
+    }
+
+    public function testACommandOffersToRunSetupForUnmigratedPermissionTables(): void
+    {
+        config(['permission.table_names.roles' => 'unmigrated_roles']);
+        $before = glob(database_path('migrations/*'));
+        $seeder = database_path('seeders/TmpSetupSeeder.php');
+
+        try {
+            $this->artisan('acl:make-seeder', ['name' => 'TmpSetupSeeder'])
+                ->expectsConfirmation('Run acl:setup now to publish the permission migrations?', 'no')
+                ->assertExitCode(1);
+            $this->assertSame($before, glob(database_path('migrations/*')));
+
+            $this->artisan('acl:make-seeder', ['name' => 'TmpSetupSeeder'])
+                ->expectsConfirmation('Run acl:setup now to publish the permission migrations?', 'yes')
+                ->expectsConfirmation('Proceed with the migration creation?', 'yes')
+                ->expectsOutputToContain('php artisan migrate')
+                ->assertExitCode(1);
+            $this->assertCount(1, array_diff(glob(database_path('migrations/*')), $before));
+            $this->assertFileDoesNotExist($seeder);
+        } finally {
+            array_map('unlink', array_diff(glob(database_path('migrations/*')), $before));
+            @unlink($seeder);
+        }
+    }
+
+    public function testNoOfferIsMadeWhenThePermissionProviderIsNotLoaded(): void
+    {
+        (function (): void {
+            unset($this->loadedProviders[PermissionServiceProvider::class]);
+        })->call($this->app);
+
+        $this->artisan('acl:make-seeder', ['name' => 'TmpUnloadedSeeder'])->expectsOutputToContain('package discovery')->assertExitCode(1);
     }
 }

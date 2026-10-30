@@ -13,6 +13,8 @@ return [
     | (whose table is "table_names.acl_teams") or your own that uses
     | Ipsocode\Acl\Concerns\IsTeam. A team holds the roles of the team named by its
     | "teams_inherit_id" column, which holds the key of another row of the same table.
+    | An interactive "acl:*" command offers to publish the permission config and turn
+    | its teams on.
     */
 
     /*
