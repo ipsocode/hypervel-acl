@@ -33,12 +33,19 @@ php artisan acl:setup --pretend
 php artisan acl:setup --force
 ```
 
-When the permission config is not published, an interactive run also offers to publish it (`vendor:publish --tag=permission-config`). Set `permission.teams` to `true` in the published file and run the command again, since the config is read at boot. Under `--no-interaction` it only prints the message.
+An interactive `acl:*` command also offers to take the missing step itself. When `config/permission.php` is not published, it offers to publish it (`vendor:publish --tag=permission-config`); when teams are off, it offers to set `'teams' => true` in that file, and tells you to set it yourself when the file holds another value. Run the command again afterwards, since the config is read at boot. When the permission tables are not migrated, it offers to run `acl:setup`, which publishes the permission migration with the package's own; run `php artisan migrate` and then the command again. Under `--no-interaction` or `--pretend` it never asks, and only prints the message.
 
 `acl:status` prints the permission package state, which of teams, tenant and workspace are on, the team and workspace models, the guards, the users table, the key type of the package's tables, and whether each migration the setup generates is published or pending. It exits non-zero, with the reason printed, when the permission package is not active, `acl.tenant` is on without a tenant column, the users table is missing or its key type differs from the user model's, or `acl.key_type` differs from the permissions table's key type, so CI can use it:
 
 ```sh
 php artisan acl:status
+```
+
+`--only` limits the report to a feature, `tenant` or `workspace`, and may be given more than once. A limited report keeps the permission package line and its problem, and otherwise shows only the settings, migrations and problems of the features it names, so a CI step can check one feature alone. The option is not called `--workspace`, which every command already takes to name the workspace it runs in:
+
+```sh
+php artisan acl:status --only=tenant
+php artisan acl:status --only=tenant --only=workspace
 ```
 
 `acl:make-seeder` takes the seeder's name (`AclSeeder` by default) and `--force`, which replaces a seeder that already exists.

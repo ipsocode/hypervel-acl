@@ -55,11 +55,17 @@ class SupportTest extends TestCase
 
             config(['permission.teams' => false]);
             file_put_contents($path, 'edited');
-            $this->artisan('acl:make-seeder', ['name' => 'TmpForceSeeder', '--force' => true])->expectsOutputToContain('permission:setup-teams')->assertExitCode(1);
+            $this->artisan('acl:make-seeder', ['name' => 'TmpForceSeeder', '--force' => true])
+                ->expectsOutputToContain('permission:setup-teams')
+                ->expectsConfirmation('Publish the permission config now?', 'no')
+                ->assertExitCode(1);
             $this->assertSame('edited', file_get_contents($path));
 
             config(['permission.teams' => true, 'permission.table_names.roles' => 'unmigrated_roles']);
-            $this->artisan('acl:make-seeder', ['name' => 'TmpForceSeeder', '--force' => true])->expectsOutputToContain('are not migrated')->assertExitCode(1);
+            $this->artisan('acl:make-seeder', ['name' => 'TmpForceSeeder', '--force' => true])
+                ->expectsOutputToContain('are not migrated')
+                ->expectsConfirmation('Run acl:setup now to publish the permission migrations?', 'no')
+                ->assertExitCode(1);
             $this->assertSame('edited', file_get_contents($path));
         } finally {
             @unlink($path);
