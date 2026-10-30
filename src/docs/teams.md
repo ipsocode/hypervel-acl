@@ -23,7 +23,7 @@ A change to a team's roles applies to the team and to every team that inherits i
 
 When `ResolveAcl` builds a member's roles, it stores the time in the member's session. On the member's next request, a membership updated at or after that time is rebuilt for that one member. A team with many members is never rebuilt all at once.
 
-A request without a session, such as an API request authenticated by token, has nowhere to keep the time, so its roles are rebuilt on every request. A check made outside a request, such as in a queued job, finds no team roles for a member who has not made a request since the change. Call `AccessSync::refresh($user, $team)` first when it needs them.
+A request without a session, such as an API request authenticated by token, keeps the time in the cache for a day, per user, team and workspace, so its roles are rebuilt only after the membership changed or the cached time expired. A check made outside a request, such as in a queued job, finds no team roles for a member who has not made a request since the change. Call `AccessSync::refresh($user, $team)` first when it needs them.
 
 ## Tenants
 

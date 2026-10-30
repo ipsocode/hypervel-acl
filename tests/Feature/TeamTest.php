@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Ipsocode\Acl\Tests\Feature;
 
+use Hypervel\Http\Request;
 use Hypervel\Permission\PermissionRegistrar;
 use Hypervel\Support\Facades\DB;
 use Ipsocode\Acl\Access\AccessSync;
@@ -12,6 +13,7 @@ use Ipsocode\Acl\Http\Middleware\ResolveAcl;
 use Ipsocode\Acl\Models\AclTeam;
 use Ipsocode\Acl\Support\Teams;
 use Ipsocode\Acl\Tests\TestCase;
+use Symfony\Component\HttpFoundation\Response;
 use Workbench\App\Models\User;
 use Workbench\Database\Seeders\AclSeeder;
 
@@ -243,6 +245,37 @@ class TeamTest extends TestCase
         $this->nextRequest($user);
 
         $this->assertNotSame($synced['at'], session(ResolveAcl::SESSION_KEY)['at']);
+        $this->assertSame(['editor'], $this->rolesOf($user, $ops));
+    }
+
+    public function testARequestWithoutASessionRebuildsOnlyAfterTheMembershipChanged(): void
+    {
+        $ops = $this->team('Ops', ['viewer']);
+        $user = User::factory()->create();
+        $ops->addUser($user);
+
+        $request = function () use ($user): void {
+            $request = Request::create('/');
+            $request->setUserResolver(fn () => $user);
+
+            $this->app->make(ResolveAcl::class)->handle($request, fn (): Response => new Response);
+        };
+
+        $request();
+        $this->assertSame(['viewer'], $this->rolesOf($user, $ops));
+
+        $writes = 0;
+        DB::listen(function ($query) use (&$writes): void {
+            $writes += preg_match('/^(insert|delete|update)/', $query->sql);
+        });
+
+        $request();
+        $this->assertSame(0, $writes);
+
+        $this->travel(1)->seconds();
+        $ops->syncTeamRoles(['editor']);
+        $request();
+
         $this->assertSame(['editor'], $this->rolesOf($user, $ops));
     }
 
