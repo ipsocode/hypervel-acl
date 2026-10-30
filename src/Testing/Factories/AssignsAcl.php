@@ -14,6 +14,9 @@ use LogicException;
  */
 trait AssignsAcl
 {
+    /**
+     * @var null|(Model&Team)
+     */
     protected ?Model $aclTeam = null;
 
     /**
@@ -44,6 +47,8 @@ trait AssignsAcl
 
     /**
      * Assign in the given team.
+     *
+     * @param Model&Team $team
      */
     public function inTeam(Model $team): static
     {
@@ -54,6 +59,7 @@ trait AssignsAcl
     }
 
     /**
+     * @param null|(Model&Team) $team
      * @return Model&Team
      */
     protected function aclTeamFor(?Model $team): Team
