@@ -179,7 +179,22 @@ class UiTest extends TestCase
     public function testThePublishTagsAreRegistered(): void
     {
         $this->assertSame([public_path('vendor/acl')], array_values(ServiceProvider::pathsToPublish(AclServiceProvider::class, 'acl-assets')));
-        $this->assertSame([resource_path('js/pages/acl')], array_values(ServiceProvider::pathsToPublish(AclServiceProvider::class, 'acl-react')));
+
+        $pages = ServiceProvider::pathsToPublish(AclServiceProvider::class, 'acl-react');
+        $published = array_map(fn (string $target): string => substr($target, strlen(resource_path('js/pages/acl/'))), array_values($pages));
+
+        // The pages and what they share; neither the bundle's entry nor the tests go to the application.
+        $this->assertContains('index.tsx', $published);
+        $this->assertContains('pages/RolesPage.tsx', $published);
+        $this->assertNotContains('app.tsx', $published);
+        $this->assertSame([], array_filter($published, fn (string $file): bool => str_contains($file, '.test.')));
+    }
+
+    public function testAnUnknownPathOfTheInternalApiIsNotFound(): void
+    {
+        $this->getJson('acl-admin/acl-api/typo')->assertNotFound();
+        $this->get('acl-admin/acl-api')->assertNotFound();
+        $this->get('acl-admin/typo')->assertOk()->assertSee('<div id="acl"></div>', false);
     }
 
     public function testSetupPublishesTheBundledAssets(): void

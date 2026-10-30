@@ -1,6 +1,6 @@
 import { type ReactNode, useMemo, useState } from 'react';
 
-import { createApi } from './api';
+import { WORKSPACE_KEY, createApi } from './api';
 import PermissionsPage from './pages/PermissionsPage';
 import RolesPage from './pages/RolesPage';
 import TeamsPage from './pages/TeamsPage';
@@ -21,16 +21,25 @@ const views: Array<{ key: string; label: string; page: () => ReactNode; when?: (
  */
 export default function Acl({ boot, pathname, navigate }: { boot: Boot; pathname: string; navigate: (url: string) => void }) {
     const api = useMemo(() => createApi(boot.path), [boot.path]);
+    // The workspace the screens act in; the input below is a draft until it is committed.
     const [workspace, setWorkspace] = useState(() => {
         try {
-            return sessionStorage.getItem('acl:workspace') ?? '';
+            return sessionStorage.getItem(WORKSPACE_KEY) ?? '';
         } catch {
             return '';
         }
     });
+    const [draft, setDraft] = useState(workspace);
     const available = views.filter((view) => view.when?.(boot) ?? true);
     const current = pathname.slice(boot.path.length).split('/').filter(Boolean)[0] ?? 'roles';
     const view = available.find((candidate) => candidate.key === current) ?? available[0];
+
+    function commit() {
+        if (draft !== workspace) {
+            setWorkspace(draft);
+            api.setWorkspace(draft === '' ? null : draft);
+        }
+    }
 
     return (
         <AclContext.Provider value={{ api, boot }}>
@@ -59,12 +68,11 @@ export default function Acl({ boot, pathname, navigate }: { boot: Boot; pathname
                             <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
                                 Acting in workspace
                                 <input
-                                    value={workspace}
+                                    value={draft}
                                     placeholder="default"
-                                    onChange={(event) => {
-                                        setWorkspace(event.target.value);
-                                        api.setWorkspace(event.target.value === '' ? null : event.target.value);
-                                    }}
+                                    onChange={(event) => setDraft(event.target.value)}
+                                    onBlur={commit}
+                                    onKeyDown={(event) => event.key === 'Enter' && commit()}
                                     className="w-24 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800"
                                 />
                             </label>

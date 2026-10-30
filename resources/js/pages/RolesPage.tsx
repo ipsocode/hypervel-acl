@@ -2,7 +2,7 @@ import { type FormEvent, useEffect, useState } from 'react';
 
 import { useCollection } from '../hooks';
 import type { Errors, Permission, Role } from '../types';
-import { Badge, Button, Card, Empty, Field, FormError, Input, Select, errorsOf, useAcl } from '../ui';
+import { Badge, Button, Card, Empty, Field, FormError, Input, Select, attempt, errorsOf, useAcl } from '../ui';
 
 type Effect = 'none' | 'allow' | 'deny';
 
@@ -98,19 +98,38 @@ function RoleEditor({ id, permissions, onChanged, onDeleted }: { id: Role['id'];
     const [effects, setEffects] = useState<Record<string, Effect>>({});
     const [errors, setErrors] = useState<Errors>({});
     const [saved, setSaved] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
 
     useEffect(() => {
-        void api.get<{ data: Role }>(`roles/${id}`).then(({ data }) => {
-            setRole(data);
-            setName(data.name);
-            setEffects(
-                Object.fromEntries([
-                    ...(data.permissions ?? []).map((permission) => [permission, 'allow'] as const),
-                    ...(data.denied ?? []).map((permission) => [permission, 'deny'] as const),
-                ]),
-            );
-        });
+        let current = true;
+
+        api.get<{ data: Role }>(`roles/${id}`)
+            .then(({ data }) => {
+                if (!current) return;
+
+                setRole(data);
+                setName(data.name);
+                setEffects(
+                    Object.fromEntries([
+                        ...(data.permissions ?? []).map((permission) => [permission, 'allow'] as const),
+                        ...(data.denied ?? []).map((permission) => [permission, 'deny'] as const),
+                    ]),
+                );
+            })
+            .catch((failure: Error) => current && setLoadError(failure.message));
+
+        return () => {
+            current = false;
+        };
     }, [api, id]);
+
+    if (loadError !== null) {
+        return (
+            <Card>
+                <Empty>{loadError}</Empty>
+            </Card>
+        );
+    }
 
     if (role === null) {
         return null;
@@ -136,8 +155,10 @@ function RoleEditor({ id, permissions, onChanged, onDeleted }: { id: Role['id'];
 
     async function destroy() {
         if (window.confirm(`Delete the role "${role?.name}"?`)) {
-            await api.delete(`roles/${id}`);
-            onDeleted();
+            await attempt(async () => {
+                await api.delete(`roles/${id}`);
+                onDeleted();
+            });
         }
     }
 

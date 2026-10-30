@@ -1,8 +1,8 @@
-import { type FormEvent, useEffect, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 
 import { useCollection } from '../hooks';
 import type { Errors, Role, Team } from '../types';
-import { Badge, Button, Card, Empty, Field, FormError, Input, Select, errorsOf, useAcl } from '../ui';
+import { Badge, Button, Card, Empty, Field, FormError, Input, Select, attempt, errorsOf, useAcl } from '../ui';
 
 export default function TeamsPage() {
     const teams = useCollection<Team>('teams');
@@ -68,6 +68,8 @@ function TeamEditor({ team, teams, roles, onSaved, onDeleted }: { team: Team | n
     const [granted, setGranted] = useState<string[]>(team?.roles ?? []);
     const [errors, setErrors] = useState<Errors>({});
     const [saved, setSaved] = useState(false);
+    // The team a failed save already created, so saving again updates it instead of making a second.
+    const created = useRef<Team | null>(null);
 
     async function save(event: FormEvent) {
         event.preventDefault();
@@ -75,7 +77,11 @@ function TeamEditor({ team, teams, roles, onSaved, onDeleted }: { team: Team | n
 
         try {
             const body = { name, inherit_id: inherit === '' ? null : inherit };
-            const response = team ? await api.put<{ data: Team }>(`teams/${team.id}`, body) : await api.post<{ data: Team }>('teams', body);
+            const existing = team ?? created.current;
+            const response = existing ? await api.put<{ data: Team }>(`teams/${existing.id}`, body) : await api.post<{ data: Team }>('teams', body);
+
+            created.current = response.data;
+
             const result = await api.put<{ data: Team }>(`teams/${response.data.id}/roles`, { roles: granted });
 
             setErrors({});
@@ -88,8 +94,10 @@ function TeamEditor({ team, teams, roles, onSaved, onDeleted }: { team: Team | n
 
     async function destroy() {
         if (team && window.confirm(`Delete the team "${team.name}"?`)) {
-            await api.delete(`teams/${team.id}`);
-            await onDeleted();
+            await attempt(async () => {
+                await api.delete(`teams/${team.id}`);
+                await onDeleted();
+            });
         }
     }
 
@@ -164,13 +172,25 @@ function Members({ team }: { team: Team }) {
     const [workspace, setWorkspace] = useState('');
     const [errors, setErrors] = useState<Errors>({});
 
-    async function load() {
-        setMembers((await api.get<{ data: Array<number | string> }>(`teams/${team.id}/users`)).data);
-    }
+    const latest = useRef(0);
+
+    // Only the latest answer sets the members, so a slow one for another team is dropped.
+    const load = useCallback(async () => {
+        const request = ++latest.current;
+        const data = (await api.get<{ data: Array<number | string> }>(`teams/${team.id}/users`)).data;
+
+        if (request === latest.current) {
+            setMembers(data);
+        }
+    }, [api, team.id]);
 
     useEffect(() => {
-        void load();
-    }, [team.id]);
+        void attempt(load);
+
+        return () => {
+            latest.current++;
+        };
+    }, [load]);
 
     async function add(event: FormEvent) {
         event.preventDefault();
@@ -186,8 +206,10 @@ function Members({ team }: { team: Team }) {
     }
 
     async function remove(member: number | string) {
-        await api.delete(`teams/${team.id}/users/${member}`, boot.workspaces && workspace !== '' ? { workspace } : undefined);
-        await load();
+        await attempt(async () => {
+            await api.delete(`teams/${team.id}/users/${member}`, boot.workspaces && workspace !== '' ? { workspace } : undefined);
+            await load();
+        });
     }
 
     return (

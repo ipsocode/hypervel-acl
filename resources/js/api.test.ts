@@ -67,3 +67,17 @@ it('maps a 422 to its field errors and any other failure to its message', async 
     expect(failure).toBeInstanceOf(ApiError);
     expect(failure).toMatchObject({ status: 403, message: 'Forbidden.', errors: {} });
 });
+
+it('sends the plain meta token as X-CSRF-TOKEN when there is no cookie', async () => {
+    document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+    document.head.innerHTML = '<meta name="csrf-token" content="plain">';
+    fetchMock.mockResolvedValue(reply(200, { data: [] }));
+
+    await createApi('/acl-admin').get('roles');
+
+    const headers = fetchMock.mock.calls[0][1].headers;
+
+    expect(headers['X-CSRF-TOKEN']).toBe('plain');
+    expect(headers['X-XSRF-TOKEN']).toBeUndefined();
+    document.head.innerHTML = '';
+});

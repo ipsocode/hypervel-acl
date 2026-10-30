@@ -18,16 +18,22 @@ export interface Api {
     setWorkspace(workspace: string | null): void;
 }
 
-const WORKSPACE_KEY = 'acl:workspace';
+export const WORKSPACE_KEY = 'acl:workspace';
 
-function csrfToken(): string | null {
+/**
+ * The CSRF header the middleware accepts: the encrypted cookie goes in X-XSRF-TOKEN,
+ * the plain meta token in X-CSRF-TOKEN.
+ */
+function csrfHeaders(): Record<string, string> {
     const cookie = document.cookie.split('; ').find((row) => row.startsWith('XSRF-TOKEN='));
 
     if (cookie) {
-        return decodeURIComponent(cookie.slice('XSRF-TOKEN='.length));
+        return { 'X-XSRF-TOKEN': decodeURIComponent(cookie.slice('XSRF-TOKEN='.length)) };
     }
 
-    return document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? null;
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content;
+
+    return meta ? { 'X-CSRF-TOKEN': meta } : {};
 }
 
 function storedWorkspace(): string | null {
@@ -50,12 +56,8 @@ export function createApi(path: string): Api {
         const headers: Record<string, string> = {
             Accept: 'application/json',
             'X-Requested-With': 'XMLHttpRequest',
+            ...csrfHeaders(),
         };
-        const token = csrfToken();
-
-        if (token) {
-            headers['X-XSRF-TOKEN'] = token;
-        }
 
         if (workspace) {
             headers['X-Workspace'] = workspace;

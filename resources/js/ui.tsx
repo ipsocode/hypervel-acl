@@ -90,3 +90,14 @@ export function FormError({ errors }: { errors: Errors }) {
 export function Empty({ children }: { children: ReactNode }) {
     return <p className="py-6 text-center text-sm text-slate-500">{children}</p>;
 }
+
+/**
+ * Run an action whose failure the user should see: a refused or failed request alerts its message.
+ */
+export async function attempt(action: () => Promise<unknown>): Promise<void> {
+    try {
+        await action();
+    } catch (failure) {
+        window.alert(failure instanceof Error ? failure.message : 'The request failed.');
+    }
+}

@@ -2,7 +2,7 @@ import { type FormEvent, useState } from 'react';
 
 import { useCollection } from '../hooks';
 import type { Errors, Permission } from '../types';
-import { Badge, Button, Card, Empty, Field, FormError, Input, Select, errorsOf, useAcl } from '../ui';
+import { Badge, Button, Card, Empty, Field, FormError, Input, Select, attempt, errorsOf, useAcl } from '../ui';
 
 export default function PermissionsPage() {
     const { api, boot } = useAcl();
@@ -42,8 +42,10 @@ export default function PermissionsPage() {
 
     async function destroy(permission: Permission) {
         if (window.confirm(`Delete the permission "${permission.name}"?`)) {
-            await api.delete(`permissions/${permission.id}`);
-            await permissions.reload();
+            await attempt(async () => {
+                await api.delete(`permissions/${permission.id}`);
+                await permissions.reload();
+            });
         }
     }
 

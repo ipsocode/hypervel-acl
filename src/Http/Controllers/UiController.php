@@ -8,6 +8,7 @@ use Hypervel\Contracts\View\View;
 use Hypervel\Inertia\Inertia;
 use Hypervel\Inertia\Response;
 use Hypervel\Routing\Controller;
+use Ipsocode\Acl\Http\UiAssets;
 use Ipsocode\Acl\Support\Config;
 use Ipsocode\Acl\Support\Frontend;
 use Ipsocode\Acl\Support\Teams;
@@ -18,7 +19,7 @@ class UiController extends Controller
     /**
      * Display the management UI in the configured frontend.
      */
-    public function index(): Response|View
+    public function index(UiAssets $assets): Response|View
     {
         $props = [
             'path' => '/' . trim(config()->string('acl.ui.path'), '/'),
@@ -31,7 +32,7 @@ class UiController extends Controller
 
         return match (Config::uiFrontend()) {
             Frontend::React => Inertia::render('acl/index', $props),
-            default => view('acl::app', ['props' => $props, 'version' => hash_file('xxh128', __DIR__ . '/../../../dist/app.js')]),
+            default => view('acl::app', ['props' => $props, 'version' => $assets->version]),
         };
     }
 }
