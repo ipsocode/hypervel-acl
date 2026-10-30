@@ -8,11 +8,17 @@ use Hypervel\Database\Eloquent\Builder;
 use Hypervel\Database\Eloquent\Model;
 use Ipsocode\Acl\Contracts\Team;
 use Ipsocode\Acl\Models\AclTeam;
+use Ipsocode\Acl\Tenant;
 use RuntimeException;
 
 class Teams
 {
-    public const MEMBERS_TABLE = 'acl_team_user';
+    public const ORGANIZATIONS_TABLE = 'acl_organizations';
+
+    /**
+     * The name of the team each tenant has for the roles everyone in it holds.
+     */
+    public const GLOBALS = 'Globals';
 
     public const DEFAULT_TEAM_PIVOT_KEY = 'team_id';
 
@@ -32,7 +38,7 @@ class Teams
     public static function model(): string
     {
         /** @var class-string<Model&Team> $model */
-        $model = config('acl.models.team') ?? AclTeam::class;
+        $model = Config::teamModel() ?? AclTeam::class;
 
         return $model;
     }
@@ -46,7 +52,7 @@ class Teams
     }
 
     /**
-     * Get the membership table's team column: acl.column_names.team_pivot_key, else team_id.
+     * Get the org role table's team column: acl.column_names.team_pivot_key, else team_id.
      */
     public static function teamPivotKey(): string
     {
@@ -54,7 +60,7 @@ class Teams
     }
 
     /**
-     * Get the membership table's user column: acl.column_names.user_pivot_key, else user_id.
+     * Get the org role table's user column: acl.column_names.user_pivot_key, else user_id.
      */
     public static function userPivotKey(): string
     {
@@ -68,15 +74,35 @@ class Teams
      */
     public static function tenantColumn(): ?string
     {
-        if (! config()->boolean('acl.tenant')) {
+        if (! Config::tenantEnabled()) {
             return null;
         }
 
-        $column = config('acl.column_names.tenant_foreign_key');
+        $column = Config::tenantForeignKey();
 
         throw_if($column === null || $column === '', 'Error: tenant_foreign_key on config/acl.php not loaded. Run [php artisan config:clear] and try again.');
 
         return $column;
+    }
+
+    /**
+     * Get the tenant's Globals team, creating it: with workspaces on, a team without an inherited
+     * team inherits it, so its roles are held by everyone in the tenant.
+     *
+     * @return Model&Team
+     */
+    public static function globals(int|string|null $tenant = null): Model
+    {
+        $column = static::tenantColumn();
+        $tenant ??= Tenant::id();
+
+        return static::query()->withoutGlobalScope('acl_tenant')
+            ->when($column !== null, fn ($query) => $query->where($column, $tenant))
+            ->where('name', self::GLOBALS)
+            ->first() ?? static::model()::create([
+                'name' => self::GLOBALS,
+                ...($column === null ? [] : [$column => $tenant]),
+            ]);
     }
 
     /**

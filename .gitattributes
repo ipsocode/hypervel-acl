@@ -2,7 +2,7 @@
 # leaves out every path marked export-ignore: what only developing, testing and
 # releasing this package needs, the files shared in .github/ included. An
 # application gets src/, config/, database/, composer.json, README.md and
-# LICENSE.
+# LICENSE, plus resources/, routes/ and dist/ for the management UI.
 /.github export-ignore
 /.claude export-ignore
 /CLAUDE.md export-ignore
@@ -15,7 +15,11 @@
 /.gitignore export-ignore
 /.php-cs-fixer.dist.php export-ignore
 /CONTRIBUTING.md export-ignore
+/package.json export-ignore
+/package-lock.json export-ignore
 /phpstan.neon export-ignore
 /phpstan-baseline.neon export-ignore
 /phpunit.xml export-ignore
 /testbench.yaml export-ignore
+/tsconfig.json export-ignore
+/vite.config.js export-ignore

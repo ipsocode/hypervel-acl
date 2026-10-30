@@ -1,0 +1,48 @@
+<?php
+
+declare(strict_types=1);
+
+use Hypervel\Database\Migrations\Migration;
+use Hypervel\Database\Schema\Blueprint;
+use Hypervel\Support\Facades\Schema;
+use Ipsocode\Acl\Support\KeyType;
+use Ipsocode\Acl\Support\Teams;
+use Ipsocode\Acl\Support\Workspaces;
+
+return new class extends Migration {
+    /**
+     * Run the migrations.
+     *
+     * Adds the parent column, and with acl.tenant on the tenant column, to the application's own
+     * workspace table, wherever either is missing. The parent holds the key of another row of
+     * the same table.
+     */
+    public function up(): void
+    {
+        $model = Workspaces::model();
+        $workspace = new $model;
+        $name = $workspace->getTable();
+        $parent = Workspaces::parentColumn();
+        $tenant = Teams::tenantColumn();
+        $key = KeyType::fromModel($model);
+
+        if (! Schema::hasColumn($name, $parent)) {
+            Schema::table($name, function (Blueprint $table) use ($name, $parent, $key, $workspace): void {
+                $key->reference($table, $parent)->nullable()->constrained($name, $workspace->getKeyName());
+            });
+        }
+
+        if ($tenant !== null && ! Schema::hasColumn($name, $tenant)) {
+            Schema::table($name, static fn (Blueprint $table) => $table->string($tenant)->nullable());
+        }
+    }
+
+    /**
+     * Reverse the migrations.
+     *
+     * The columns may have been the application's own before this ran, so they are left in place.
+     */
+    public function down(): void
+    {
+    }
+};

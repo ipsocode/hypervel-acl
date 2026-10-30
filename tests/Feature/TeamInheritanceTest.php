@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Ipsocode\Acl\Tests\Feature;
 
+use Hypervel\Database\QueryException;
 use Hypervel\Permission\PermissionRegistrar;
 use Hypervel\Support\Facades\Cache;
 use Hypervel\Support\Facades\DB;
@@ -132,6 +133,22 @@ class TeamInheritanceTest extends TestCase
         $this->assertCount(1, $this->app->make(AccessSync::class)->dependents($a));
     }
 
+    public function testTheApiRejectsADuplicateTeamName(): void
+    {
+        $admins = AclTeam::create(['name' => 'Admins']);
+        $other = AclTeam::create(['name' => 'Other']);
+        $admin = User::factory()->create();
+
+        $admins->syncTeamRoles(['manager']);
+        $admins->addUser($admin);
+
+        $this->actingAs($admin);
+
+        $this->postJson('acl/teams', ['name' => 'Other'])->assertUnprocessable()->assertJsonValidationErrors('name');
+        $this->putJson("acl/teams/{$admins->id}", ['name' => 'Other'])->assertUnprocessable()->assertJsonValidationErrors('name');
+        $this->putJson("acl/teams/{$other->id}", ['name' => 'Other'])->assertOk();
+    }
+
     public function testTheApiRejectsAnInheritanceCycleOrAForeignTeam(): void
     {
         $admins = AclTeam::create(['name' => 'Admins']);
@@ -183,6 +200,25 @@ class TeamInheritanceTest extends TestCase
         $this->assertFalse(Cache::has(AccessSync::CHAIN_CACHE_KEY_PREFIX . $team->id));
     }
 
+    public function testDeletingATeamOthersInheritLeavesItsMembersRoles(): void
+    {
+        $base = AclTeam::create(['name' => 'Base']);
+        AclTeam::create(['name' => 'Lead', 'inherit_id' => $base->id]);
+        $user = User::factory()->create();
+
+        $base->syncTeamRoles(['viewer']);
+        $base->addUser($user);
+
+        try {
+            $base->delete();
+            $this->fail('The delete should have been refused by the inherit key.');
+        } catch (QueryException) {
+            // The purge ran inside the transaction that the failed delete rolled back.
+        }
+
+        $this->assertSame(['viewer'], $this->rolesOf($user, $base));
+    }
+
     public function testDependentsAreCachedAndFollowTeamsAddedMovedAndDeleted(): void
     {
         $sync = $this->app->make(AccessSync::class);
@@ -231,7 +267,7 @@ class TeamInheritanceTest extends TestCase
         // The teams keep their own roles.
         $this->assertSame(['viewer'], $lead->ownRoleNames());
 
-        $changed = DB::table(Teams::MEMBERS_TABLE)->pluck('updated_at', Teams::userPivotKey());
+        $changed = DB::table(Teams::ORGANIZATIONS_TABLE)->pluck('updated_at', Teams::userPivotKey());
         $teams = DB::table('acl_teams')->pluck('updated_at', 'id');
 
         // Stored to the millisecond, which the staleness check compares at.

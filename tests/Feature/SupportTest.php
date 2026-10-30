@@ -7,6 +7,10 @@ namespace Ipsocode\Acl\Tests\Feature;
 use Hypervel\Database\Migrations\Migrator;
 use Ipsocode\Acl\AclServiceProvider;
 use Ipsocode\Acl\Database\Seeders\AclSeeder as BaseSeeder;
+use Ipsocode\Acl\Exceptions\TenantNotEnabled;
+use Ipsocode\Acl\Exceptions\WorkspaceNotEnabled;
+use Ipsocode\Acl\Support\Config;
+use Ipsocode\Acl\Support\Workspaces;
 use Ipsocode\Acl\Tests\Fixtures\PlainRole;
 use Ipsocode\Acl\Tests\TestCase;
 use LogicException;
@@ -30,6 +34,33 @@ class SupportTest extends TestCase
         try {
             $this->artisan('acl:make-seeder', ['name' => 'TmpAclSeeder'])->assertExitCode(0);
             $this->assertStringContainsString('extends BaseAclSeeder', file_get_contents($path));
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    public function testMakeAclSeederHonorsForceAndChecksThePermissionPackage(): void
+    {
+        $path = database_path('seeders/TmpForceSeeder.php');
+
+        try {
+            $this->artisan('acl:make-seeder', ['name' => 'TmpForceSeeder'])->assertExitCode(0);
+            file_put_contents($path, 'edited');
+
+            $this->artisan('acl:make-seeder', ['name' => 'TmpForceSeeder'])->assertExitCode(0);
+            $this->assertSame('edited', file_get_contents($path));
+
+            $this->artisan('acl:make-seeder', ['name' => 'TmpForceSeeder', '--force' => true])->assertExitCode(0);
+            $this->assertStringContainsString('extends BaseAclSeeder', file_get_contents($path));
+
+            config(['permission.teams' => false]);
+            file_put_contents($path, 'edited');
+            $this->artisan('acl:make-seeder', ['name' => 'TmpForceSeeder', '--force' => true])->expectsOutputToContain('permission:setup-teams')->assertExitCode(1);
+            $this->assertSame('edited', file_get_contents($path));
+
+            config(['permission.teams' => true, 'permission.table_names.roles' => 'unmigrated_roles']);
+            $this->artisan('acl:make-seeder', ['name' => 'TmpForceSeeder', '--force' => true])->expectsOutputToContain('are not migrated')->assertExitCode(1);
+            $this->assertSame('edited', file_get_contents($path));
         } finally {
             @unlink($path);
         }
@@ -69,5 +100,40 @@ class SupportTest extends TestCase
     public function testTheTeamOptionSetsTheCurrentTeamOfACommand(): void
     {
         $this->artisan('permission:show', ['--team' => '3'])->assertExitCode(0);
+    }
+
+    public function testTenantsAndWorkspacesMustBeEnabledToBeEnsured(): void
+    {
+        $this->assertFalse(Config::tenantEnabled());
+        $this->assertFalse(Config::workspaceEnabled());
+
+        try {
+            Config::ensureTenantEnabled();
+            $this->fail('Tenants should not be enabled.');
+        } catch (TenantNotEnabled $exception) {
+            $this->assertStringContainsString('`tenant`', $exception->getMessage());
+        }
+
+        try {
+            Config::ensureWorkspaceEnabled();
+            $this->fail('Workspaces should not be enabled.');
+        } catch (WorkspaceNotEnabled $exception) {
+            $this->assertStringContainsString('`workspace`', $exception->getMessage());
+        }
+
+        config(['acl.tenant' => true, 'acl.workspace' => true]);
+
+        Config::ensureTenantEnabled();
+        Config::ensureWorkspaceEnabled();
+
+        $this->assertTrue(Config::tenantEnabled());
+        $this->assertTrue(Config::workspaceEnabled());
+    }
+
+    public function testTheWorkspaceColumnNeedsWorkspacesOn(): void
+    {
+        $this->expectException(WorkspaceNotEnabled::class);
+
+        Workspaces::column();
     }
 }
