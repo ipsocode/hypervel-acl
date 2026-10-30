@@ -11,9 +11,13 @@ use Hypervel\Support\Facades\Date;
 use Hypervel\Support\Facades\DB;
 use Ipsocode\Acl\Access\AccessSync;
 use Ipsocode\Acl\Contracts\Team;
+use Ipsocode\Acl\Events\OrgRoleAdding;
 use Ipsocode\Acl\Exceptions\UserAlreadyInTeam;
+use Ipsocode\Acl\Support\Config;
 use Ipsocode\Acl\Support\Teams;
+use Ipsocode\Acl\Support\Workspaces;
 use Ipsocode\Acl\Tenant;
+use Ipsocode\Acl\Workspace;
 
 /**
  * Makes a model a team: an organizational role whose members hold its roles under the team's id.
@@ -30,8 +34,17 @@ trait IsTeam
      */
     public static function bootIsTeam(): void
     {
+        static::creating(static function (self $team): void {
+            $inherit = Config::teamsInheritKey();
+
+            // With workspaces on, a team inherits its tenant's Globals team unless it says otherwise.
+            if (Workspaces::enabled() && $team->getAttribute($inherit) === null && $team->getAttribute('name') !== Teams::GLOBALS) {
+                $team->setAttribute($inherit, Teams::globals($team->tenant())->getKey());
+            }
+        });
+
         static::created(static function (self $team): void {
-            $parent = $team->getAttribute(config('acl.column_names.teams_inherit_key'));
+            $parent = $team->getAttribute(Config::teamsInheritKey());
 
             app(AccessSync::class)->forgetDependentsAbove($parent);
             DB::afterCommit(static fn () => app(AccessSync::class)->forgetDependentsAbove($parent));
@@ -42,11 +55,11 @@ trait IsTeam
 
             $sync->purge($team);
             $sync->forgetChains($team);
-            $sync->forgetDependentsAbove($team->getAttribute(config('acl.column_names.teams_inherit_key')));
+            $sync->forgetDependentsAbove($team->getAttribute(Config::teamsInheritKey()));
         });
 
         static::saved(static function (self $team): void {
-            $column = config('acl.column_names.teams_inherit_key');
+            $column = Config::teamsInheritKey();
 
             if (! $team->wasChanged($column)) {
                 return;
@@ -81,7 +94,7 @@ trait IsTeam
      */
     public function guardName(): array
     {
-        return config('acl.guards');
+        return Config::guards();
     }
 
     /**
@@ -89,7 +102,7 @@ trait IsTeam
      */
     public function inheritedTeam(): ?Team
     {
-        $key = $this->getAttribute(config('acl.column_names.teams_inherit_key'));
+        $key = $this->getAttribute(Config::teamsInheritKey());
 
         return $key === null ? null : static::query()->whereKey($key)->first();
     }
@@ -126,7 +139,7 @@ trait IsTeam
     public function memberKeys(): array
     {
         /** @var list<int|string> $keys */
-        $keys = DB::table(Teams::MEMBERS_TABLE)->where(Teams::teamPivotKey(), $this->getKey())->pluck(Teams::userPivotKey())->all();
+        $keys = DB::table(Teams::membersTable())->where(Teams::teamPivotKey(), $this->getKey())->distinct()->pluck(Teams::userPivotKey())->all();
 
         return $keys;
     }
@@ -142,7 +155,7 @@ trait IsTeam
     }
 
     /**
-     * Run the callback as the team itself, in its tenant, where its own roles are kept.
+     * Run the callback as the team itself, in its tenant and the home workspace, where its own roles are kept.
      *
      * @template TReturn
      *
@@ -156,7 +169,7 @@ trait IsTeam
         setPermissionsTeamId($this->getKey());
 
         try {
-            return Tenant::run($this->tenant(), $callback);
+            return Tenant::run($this->tenant(), fn () => Workspace::run(Workspace::HOME, $callback));
         } finally {
             setPermissionsTeamId($previous);
         }
@@ -165,15 +178,22 @@ trait IsTeam
     /**
      * Add a user to the team, giving the user the team's roles.
      *
-     * @throws UserAlreadyInTeam when the user is in another team of the tenant
+     * With workspaces on, this is an org role held in the given workspace, the home one by
+     * default, applying there and beneath it.
+     *
+     * @throws UserAlreadyInTeam when the user is in another team of the tenant, or, with workspaces on,
+     *                           holds an org role in a workspace that references the given one
      */
-    public function addUser(Model $user): void
+    public function addUser(Model $user, int|string $workspace = Workspace::HOME): void
     {
+        $workspaces = Workspaces::enabled();
         $tenant = Teams::tenantColumn();
-        $members = DB::table(Teams::MEMBERS_TABLE);
+        $members = DB::table(Teams::membersTable());
 
-        // The team's own tenant decides, whichever tenant the caller is acting in.
-        if ((clone $members)
+        if ($workspaces) {
+            app('events')->dispatch(new OrgRoleAdding($this, $user, $workspace));
+        } elseif ((clone $members)
+            // The team's own tenant decides, whichever tenant the caller is acting in.
             ->where(Teams::userPivotKey(), $user->getKey())
             ->where(Teams::teamPivotKey(), '!=', $this->getKey())
             ->when($tenant !== null, fn ($query) => $query->where($tenant, $this->tenant()))
@@ -184,20 +204,27 @@ trait IsTeam
         $members->insertOrIgnore([
             Teams::teamPivotKey() => $this->getKey(),
             Teams::userPivotKey() => $user->getKey(),
+            ...($workspaces ? [Workspaces::column() => $workspace] : []),
             ...($tenant === null ? [] : [$tenant => $this->tenant()]),
             'created_at' => Date::now()->format(Teams::DATE_FORMAT),
         ]);
 
-        app(AccessSync::class)->refresh($user, $this);
+        Workspace::run($workspace, fn () => app(AccessSync::class)->refresh($user, $this));
     }
 
     /**
-     * Remove a user from the team, taking the team's roles away.
+     * Remove a user from the team, taking the team's roles away; with workspaces on, only the
+     * org role held in the given workspace, or all of the team's when none is given.
      */
-    public function removeUser(Model $user): void
+    public function removeUser(Model $user, int|string|null $workspace = null): void
     {
-        DB::table(Teams::MEMBERS_TABLE)->where(Teams::teamPivotKey(), $this->getKey())->where(Teams::userPivotKey(), $user->getKey())->delete();
+        $members = DB::table(Teams::membersTable())->where(Teams::teamPivotKey(), $this->getKey())->where(Teams::userPivotKey(), $user->getKey());
 
-        app(AccessSync::class)->rebuildMember($user, $this, remove: true);
+        (clone $members)->when($workspace !== null, fn ($query) => $query->where(Workspaces::column(), $workspace))->delete();
+
+        app(AccessSync::class)->releaseMember($user, $this);
+
+        // The user's roles under the team are gone in every workspace, so what remains is rebuilt.
+        $members->update(['updated_at' => Date::now()->format(Teams::DATE_FORMAT)]);
     }
 }

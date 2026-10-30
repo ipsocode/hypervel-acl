@@ -14,8 +14,11 @@ use Hypervel\Support\Collection;
 use Hypervel\Support\Facades\Date;
 use Hypervel\Support\Facades\DB;
 use Ipsocode\Acl\Contracts\Team;
+use Ipsocode\Acl\Support\Config as AclConfig;
 use Ipsocode\Acl\Support\Teams;
+use Ipsocode\Acl\Support\Workspaces;
 use Ipsocode\Acl\Tenant;
+use Ipsocode\Acl\Workspace;
 use stdClass;
 
 class AccessSync
@@ -29,15 +32,35 @@ class AccessSync
     }
 
     /**
-     * Give a user the team's effective roles, or take them away, under the team's id.
+     * Give a user the team's effective roles, or take them away, under the team's id, in one
+     * workspace: the current one unless given.
      *
      * @param Model&Team $team
      */
-    public function rebuildMember(Model $user, Team $team, bool $remove = false): void
+    public function rebuildMember(Model $user, Team $team, bool $remove = false, int|string|null $workspace = null): void
     {
         $this->asTeam($team, function () use ($user, $team, $remove): void {
             $user->syncRoles($remove ? [] : $this->rolesFor($team)); // @phpstan-ignore method.notFound (the user uses HasRoles)
-        });
+        }, $workspace ?? Workspace::id());
+    }
+
+    /**
+     * Take a user's roles under the team away in every workspace, in one query.
+     *
+     * @param Model&Team $team
+     */
+    public function releaseMember(Model $user, Team $team): void
+    {
+        $rows = DB::table(Config::modelHasRolesTable())
+            ->where(Config::teamForeignKey(), $team->getKey())
+            ->where('model_type', $user->getMorphClass())
+            ->where(Config::morphKey(), $user->getKey());
+
+        $partitions = $this->partitions(clone $rows);
+
+        $rows->delete();
+
+        $this->forgetCachedPermissions([$team->getKey()], $partitions);
     }
 
     /**
@@ -79,26 +102,45 @@ class AccessSync
         $model = new (Teams::model());
 
         // The teams' own rows, which hold each team's roles, stay.
-        DB::table(Config::modelHasRolesTable())
+        $rows = DB::table(Config::modelHasRolesTable())
             ->whereIn(Config::teamForeignKey(), $keys)
-            ->where('model_type', '!=', $team->getMorphClass())
-            ->delete();
+            ->where('model_type', '!=', $team->getMorphClass());
 
-        DB::table(Teams::MEMBERS_TABLE)->whereIn(Teams::teamPivotKey(), $keys)->update(['updated_at' => $now]);
+        $partitions = $this->partitions(clone $rows);
+
+        $rows->delete();
+
+        DB::table(Teams::membersTable())->whereIn(Teams::teamPivotKey(), $keys)->update(['updated_at' => $now]);
 
         // The model's own date format keeps the milliseconds a bulk touch() would round away.
         Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($keys)->toBase()
             ->update([$model->getUpdatedAtColumn() => $model->freshTimestampString()]);
 
-        $this->forgetCachedPermissions($keys);
+        $this->forgetCachedPermissions($keys, $partitions);
     }
 
     /**
-     * Forget the permission cache of each tenant the given teams belong to; a raw delete skips it.
+     * Get the workspaces the rows are in, or the home one with workspaces off.
+     *
+     * @param \Hypervel\Database\Query\Builder $rows
+     * @return list<int|string>
+     */
+    protected function partitions($rows): array
+    {
+        /** @var list<int|string> $partitions */
+        $partitions = Workspaces::enabled() ? $rows->distinct()->pluck(Workspaces::column())->all() : [Workspace::HOME];
+
+        return $partitions;
+    }
+
+    /**
+     * Forget the permission cache of each tenant the given teams belong to, in each of the
+     * workspaces; a raw delete skips it.
      *
      * @param list<int|string> $keys
+     * @param list<int|string> $partitions
      */
-    protected function forgetCachedPermissions(array $keys): void
+    protected function forgetCachedPermissions(array $keys, array $partitions): void
     {
         $column = Teams::tenantColumn();
 
@@ -107,7 +149,9 @@ class AccessSync
             : Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($keys)->distinct()->pluck($column)->all();
 
         foreach ($tenants as $tenant) {
-            Tenant::run($tenant, fn () => $this->registrar->forgetCachedPermissions());
+            foreach ($partitions as $partition) {
+                Tenant::run($tenant, fn () => Workspace::run($partition, fn () => $this->registrar->forgetCachedPermissions()));
+            }
         }
     }
 
@@ -122,7 +166,7 @@ class AccessSync
             $subject = $this->subject($row);
 
             if ($subject !== null) {
-                $this->rebuildMember($subject, $team, remove: true);
+                $this->rebuildMember($subject, $team, remove: true, workspace: $row->workspace ?? null);
             }
         }
     }
@@ -139,7 +183,7 @@ class AccessSync
     {
         /** @var list<int|string> $dependents */
         $dependents = $this->cache->rememberForever(self::DEPENDENTS_CACHE_KEY_PREFIX . $team->getKey(), function () use ($team): array {
-            $column = config('acl.column_names.teams_inherit_key');
+            $column = AclConfig::teamsInheritKey();
             $seen = [(string) $team->getKey() => true];
             $queue = [$team->getKey()];
             $found = [];
@@ -197,6 +241,7 @@ class AccessSync
             ->where('model_type', $team->getMorphClass())
             ->whereIn(Config::morphKey(), $this->chainOf($team))
             ->whereColumn(Config::teamForeignKey(), Config::morphKey())
+            ->when(Workspaces::enabled(), fn ($query) => $query->where(Workspaces::column(), Workspace::HOME))
             ->select($pivot);
 
         /** @var list<string> $names */
@@ -217,7 +262,7 @@ class AccessSync
     {
         /** @var list<int|string> $chain */
         $chain = $this->cache->rememberForever(self::CHAIN_CACHE_KEY_PREFIX . $team->getKey(), function () use ($team): array {
-            $column = config('acl.column_names.teams_inherit_key');
+            $column = AclConfig::teamsInheritKey();
             $chain = [$team->getKey()];
             $seen = [(string) $team->getKey() => true];
 
@@ -257,7 +302,7 @@ class AccessSync
             ->where(Config::teamForeignKey(), $team->getKey())
             ->when(! $withOwn, fn ($query) => $query->where('model_type', '!=', $team->getMorphClass()))
             ->distinct()
-            ->get(['model_type', Config::morphKey() . ' as model_id']);
+            ->get(['model_type', Config::morphKey() . ' as model_id', ...(Workspaces::enabled() ? [Workspaces::column() . ' as workspace'] : [])]);
     }
 
     /**
@@ -271,19 +316,19 @@ class AccessSync
     }
 
     /**
-     * Run the callback as the team, in the team's tenant.
+     * Run the callback as the team, in the team's tenant and the given workspace.
      *
      * @param Model&Team $team
      * @param Closure(): void $callback
      */
-    protected function asTeam(Team $team, Closure $callback): void
+    protected function asTeam(Team $team, Closure $callback, int|string $workspace): void
     {
         $previous = $this->registrar->getPermissionsTeamId();
 
         $this->registrar->setPermissionsTeamId($team->getKey());
 
         try {
-            Tenant::run($team->tenant(), $callback);
+            Tenant::run($team->tenant(), fn () => Workspace::run($workspace, $callback));
         } finally {
             $this->registrar->setPermissionsTeamId($previous);
         }

@@ -9,6 +9,7 @@ use Hypervel\Support\Facades\Date;
 use Hypervel\Support\Facades\File;
 use Hypervel\Support\Facades\Schema;
 use Ipsocode\Acl\Support\Teams;
+use Ipsocode\Acl\Support\Workspaces;
 use SplFileInfo;
 
 class SetupCommand extends Command
@@ -83,9 +84,11 @@ class SetupCommand extends Command
 
     /**
      * Get the stubs to copy: the inheritance column for the application's own team table, and,
-     * with acl.tenant on, the tenant column for the permission and team tables.
+     * with acl.tenant on, the tenant column for the permission and team tables, and, with
+     * acl.workspace on, the partition column for the permission tables and, for the application's
+     * own workspace model, its parent column.
      *
-     * The package's team table is a migration the package loads itself.
+     * The package's team and workspace tables are migrations the package loads itself.
      *
      * @return list<string>
      */
@@ -94,6 +97,8 @@ class SetupCommand extends Command
         return [
             ...(Teams::usesPackageModel() ? [] : ['add_team_inheritance']),
             ...(Teams::tenantColumn() !== null ? ['add_tenant_column'] : []),
+            ...(Workspaces::enabled() ? ['add_workspace_column'] : []),
+            ...(Workspaces::enabled() && Workspaces::model() !== null && ! Workspaces::usesPackageModel() ? ['add_workspace_parent'] : []),
         ];
     }
 

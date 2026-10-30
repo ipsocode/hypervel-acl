@@ -16,7 +16,9 @@ use Ipsocode\Acl\Exceptions\UserAlreadyInTeam;
 use Ipsocode\Acl\Http\Requests\SyncRolesRequest;
 use Ipsocode\Acl\Http\Requests\TeamRequest;
 use Ipsocode\Acl\Http\Resources\TeamResource;
+use Ipsocode\Acl\Support\Config;
 use Ipsocode\Acl\Support\Teams;
+use Ipsocode\Acl\Workspace;
 use Symfony\Component\HttpFoundation\Response;
 
 class TeamController extends Controller
@@ -73,10 +75,11 @@ class TeamController extends Controller
     public function addUser(Request $request, int|string $team): Response
     {
         $team = $this->teams()->findOrFail($team);
-        $user = $this->userModel()::query()->whereKey($request->validate(['user_id' => ['required']])['user_id'])->firstOrFail();
+        $input = $request->validate(['user_id' => ['required'], 'workspace' => ['sometimes', 'nullable']]);
+        $user = $this->userModel()::query()->whereKey($input['user_id'])->firstOrFail();
 
         try {
-            $team->addUser($user);
+            $team->addUser($user, $input['workspace'] ?? Workspace::HOME);
         } catch (UserAlreadyInTeam $exception) {
             throw ValidationException::withMessages(['user_id' => $exception->getMessage()]);
         }
@@ -84,9 +87,9 @@ class TeamController extends Controller
         return response()->noContent(201);
     }
 
-    public function removeUser(int|string $team, int|string $user): Response
+    public function removeUser(Request $request, int|string $team, int|string $user): Response
     {
-        $this->teams()->findOrFail($team)->removeUser($this->userModel()::query()->whereKey($user)->firstOrFail());
+        $this->teams()->findOrFail($team)->removeUser($this->userModel()::query()->whereKey($user)->firstOrFail(), $request->filled('workspace') ? $request->string('workspace')->toString() : null);
 
         return response()->noContent();
     }
@@ -126,6 +129,6 @@ class TeamController extends Controller
      */
     protected function userModel(): string
     {
-        return Guard::getModelForGuard(config('acl.guards')[0]);
+        return Guard::getModelForGuard(Config::guards()[0]);
     }
 }

@@ -6,7 +6,9 @@ use Hypervel\Support\Facades\Route;
 use Ipsocode\Acl\Http\Controllers\PermissionController;
 use Ipsocode\Acl\Http\Controllers\RoleController;
 use Ipsocode\Acl\Http\Controllers\TeamController;
+use Ipsocode\Acl\Http\Controllers\WorkspaceController;
 use Ipsocode\Acl\Http\Middleware\ResolveAcl;
+use Ipsocode\Acl\Support\Workspaces;
 
 $config = config('acl.routes');
 $gate = static fn (string $name): string => 'permission:' . ($config['permissions'][$name] ?? $config['name'] . $name);
@@ -37,4 +39,16 @@ Route::prefix($config['prefix'])
         Route::get('teams/{team}/users', [TeamController::class, 'users'])->name('teams.users')->middleware($gate('teams.users'));
         Route::post('teams/{team}/users', [TeamController::class, 'addUser'])->name('teams.users.add')->middleware($gate('teams.users.add'));
         Route::delete('teams/{team}/users/{user}', [TeamController::class, 'removeUser'])->name('teams.users.remove')->middleware($gate('teams.users.remove'));
+
+        if (Workspaces::enabled()) {
+            Route::get('reach', [WorkspaceController::class, 'reach'])->name('reach')->middleware($gate('reach'));
+        }
+
+        if (Workspaces::enabled() && Workspaces::model() !== null) {
+            Route::get('workspaces', [WorkspaceController::class, 'index'])->name('workspaces.index')->middleware($gate('workspaces.index'));
+            Route::post('workspaces', [WorkspaceController::class, 'store'])->name('workspaces.store')->middleware($gate('workspaces.store'));
+            Route::get('workspaces/{aclWorkspace}', [WorkspaceController::class, 'show'])->name('workspaces.show')->middleware($gate('workspaces.show'));
+            Route::put('workspaces/{aclWorkspace}', [WorkspaceController::class, 'update'])->name('workspaces.update')->middleware($gate('workspaces.update'));
+            Route::delete('workspaces/{aclWorkspace}', [WorkspaceController::class, 'destroy'])->name('workspaces.destroy')->middleware($gate('workspaces.destroy'));
+        }
     });

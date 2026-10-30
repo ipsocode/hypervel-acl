@@ -8,7 +8,9 @@ use Hypervel\Database\Seeder;
 use Hypervel\Permission\PermissionRegistrar;
 use Ipsocode\Acl\Contracts\RoleDefinition;
 use Ipsocode\Acl\Support\Teams;
+use Ipsocode\Acl\Support\Workspaces;
 use Ipsocode\Acl\Tenant;
+use Ipsocode\Acl\Workspace;
 
 abstract class AclSeeder extends Seeder
 {
@@ -22,7 +24,8 @@ abstract class AclSeeder extends Seeder
     /**
      * Seed the declared roles; running it again changes nothing.
      *
-     * Roles are created without a team, so every team may hold them.
+     * Roles are created without a team, so every team may hold them, in each workspace of the
+     * model, or the current one without a model; run it again after adding a workspace.
      */
     public function run(): void
     {
@@ -32,7 +35,12 @@ abstract class AclSeeder extends Seeder
         $registrar->setPermissionsTeamId(null);
 
         try {
-            $this->seed(array_values($this->definitions()));
+            $definitions = array_values($this->definitions());
+
+            // Roles are the same in every workspace, each partition holding its own copy.
+            foreach (Workspaces::enabled() && Workspaces::model() !== null ? Workspaces::partitions() : [Workspace::id()] as $workspace) {
+                Workspace::run($workspace, fn () => $this->seed($definitions));
+            }
         } finally {
             $registrar->setPermissionsTeamId($previous);
         }
@@ -58,9 +66,12 @@ abstract class AclSeeder extends Seeder
             ->mapWithKeys(fn ($permission) => [$permission->guard_name . "\0" . $permission->name => true])
             ->all();
 
-        // A raw insert skips the tenant scope's stamping, so the current tenant is written here.
+        // A raw insert skips the tenant and partition stamping, so the current ones are written here.
         $column = Teams::tenantColumn();
-        $tenant = $column === null ? [] : [$column => Tenant::id()];
+        $tenant = [
+            ...($column === null ? [] : [$column => Tenant::id()]),
+            ...(Workspaces::enabled() ? [Workspaces::column() => Workspace::id()] : []),
+        ];
 
         $now = now();
         $missing = [];
