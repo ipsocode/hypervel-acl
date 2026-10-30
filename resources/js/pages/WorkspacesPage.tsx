@@ -5,11 +5,9 @@ import type { Errors, Workspace } from '../types';
 import { Badge, Button, Card, Empty, Field, FormError, Input, Select, errorsOf, useAcl } from '../ui';
 
 export default function WorkspacesPage() {
-    const { boot } = useAcl();
-
     return (
         <div className="space-y-6">
-            {boot.workspaceModel && <Tree />}
+            <Tree />
             <Reach />
         </div>
     );

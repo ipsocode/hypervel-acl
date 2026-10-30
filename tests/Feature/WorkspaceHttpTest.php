@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Ipsocode\Acl\Tests\Feature;
 
 use Hypervel\Database\QueryException;
+use Hypervel\Http\Request;
 use Hypervel\Permission\Support\Config;
 use Hypervel\Support\Facades\DB;
 use Ipsocode\Acl\Models\AclTeam;
 use Ipsocode\Acl\Models\AclWorkspace;
 use Ipsocode\Acl\Tests\WorkspaceTestCase;
 use Ipsocode\Acl\Workspaces\Reach;
+use Ipsocode\Acl\Workspaces\RequestWorkspaceResolver;
 use Workbench\App\Models\User;
 use Workbench\Database\Seeders\AclSeeder;
 
@@ -262,5 +264,21 @@ class WorkspaceHttpTest extends WorkspaceTestCase
 
         $this->deleteJson("acl/teams/{$ops->id}/users/{$user->id}")->assertNoContent();
         $this->assertSame(0, DB::table('acl_team_workspace_user')->where('user_id', $user->id)->count());
+    }
+
+    public function testAnEmptyWorkspaceHeaderForgetsTheSelection(): void
+    {
+        $resolver = $this->app->make(RequestWorkspaceResolver::class);
+        $session = $this->app->make('session')->driver();
+
+        $request = fn (?string $header): Request => tap(Request::create('/'), function (Request $request) use ($session, $header): void {
+            $request->setHypervelSession($session);
+            $header === null || $request->headers->set('X-Workspace', $header);
+        });
+
+        $this->assertSame('5', $resolver->resolve($request('5')));
+        $this->assertSame('5', $resolver->resolve($request(null)));
+        $this->assertNull($resolver->resolve($request('')));
+        $this->assertNull($resolver->resolve($request(null)));
     }
 }

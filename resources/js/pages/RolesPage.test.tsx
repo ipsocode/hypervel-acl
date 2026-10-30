@@ -10,7 +10,7 @@ import RolesPage from './RolesPage';
 
 afterEach(cleanup);
 
-const boot: Boot = { path: '/acl-admin', workspaces: false, workspaceModel: false, workspaceParent: null, tenant: false, guards: ['web'] };
+const boot: Boot = { path: '/acl-admin', workspaces: false, workspaceModel: false, workspaceParent: null, tenant: false, guards: ['web'], workspace: null };
 
 function mount(overrides: Partial<Api> = {}) {
     const api: Api = {

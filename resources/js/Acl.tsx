@@ -1,6 +1,6 @@
 import { type ReactNode, useMemo, useState } from 'react';
 
-import { WORKSPACE_KEY, createApi } from './api';
+import { createApi } from './api';
 import PermissionsPage from './pages/PermissionsPage';
 import RolesPage from './pages/RolesPage';
 import TeamsPage from './pages/TeamsPage';
@@ -12,7 +12,7 @@ const views: Array<{ key: string; label: string; page: () => ReactNode; when?: (
     { key: 'roles', label: 'Roles', page: () => <RolesPage /> },
     { key: 'permissions', label: 'Permissions', page: () => <PermissionsPage /> },
     { key: 'teams', label: 'Teams', page: () => <TeamsPage /> },
-    { key: 'workspaces', label: 'Workspaces', page: () => <WorkspacesPage />, when: (boot) => boot.workspaces },
+    { key: 'workspaces', label: 'Workspaces', page: () => <WorkspacesPage />, when: (boot) => boot.workspaceModel },
 ];
 
 /**
@@ -20,15 +20,9 @@ const views: Array<{ key: string; label: string; page: () => ReactNode; when?: (
  * (the browser, or Inertia) and how to move to another one.
  */
 export default function Acl({ boot, pathname, navigate }: { boot: Boot; pathname: string; navigate: (url: string) => void }) {
-    const api = useMemo(() => createApi(boot.path), [boot.path]);
-    // The workspace the screens act in; the input below is a draft until it is committed.
-    const [workspace, setWorkspace] = useState(() => {
-        try {
-            return sessionStorage.getItem(WORKSPACE_KEY) ?? '';
-        } catch {
-            return '';
-        }
-    });
+    // The workspace the screens act in, as the server resolved it; the input below is a draft until committed.
+    const [workspace, setWorkspace] = useState(boot.workspace === null ? '' : String(boot.workspace));
+    const api = useMemo(() => createApi(boot.path, boot.workspace === null ? null : String(boot.workspace)), [boot.path, boot.workspace]);
     const [draft, setDraft] = useState(workspace);
     const available = views.filter((view) => view.when?.(boot) ?? true);
     const current = pathname.slice(boot.path.length).split('/').filter(Boolean)[0] ?? 'roles';
@@ -37,7 +31,7 @@ export default function Acl({ boot, pathname, navigate }: { boot: Boot; pathname
     function commit() {
         if (draft !== workspace) {
             setWorkspace(draft);
-            api.setWorkspace(draft === '' ? null : draft);
+            api.setWorkspace(draft);
         }
     }
 
@@ -69,7 +63,7 @@ export default function Acl({ boot, pathname, navigate }: { boot: Boot; pathname
                                 Acting in workspace
                                 <input
                                     value={draft}
-                                    placeholder="default"
+                                    placeholder="your default"
                                     onChange={(event) => setDraft(event.target.value)}
                                     onBlur={commit}
                                     onKeyDown={(event) => event.key === 'Enter' && commit()}

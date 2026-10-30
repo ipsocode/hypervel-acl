@@ -13,6 +13,7 @@ use Ipsocode\Acl\Support\Config;
 use Ipsocode\Acl\Support\Frontend;
 use Ipsocode\Acl\Support\Teams;
 use Ipsocode\Acl\Support\Workspaces;
+use Ipsocode\Acl\Workspace;
 
 class UiController extends Controller
 {
@@ -24,6 +25,7 @@ class UiController extends Controller
         $props = [
             'path' => '/' . trim(config()->string('acl.ui.path'), '/'),
             'workspaces' => Workspaces::enabled(),
+            'workspace' => Workspaces::enabled() ? Workspace::id() : null,
             'workspaceModel' => Workspaces::enabled() && Workspaces::model() !== null,
             'workspaceParent' => Workspaces::enabled() ? Workspaces::parentColumn() : null,
             'tenant' => Teams::tenantColumn() !== null,

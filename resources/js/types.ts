@@ -1,6 +1,7 @@
 export interface Boot {
     path: string;
     workspaces: boolean;
+    workspace: number | string | null;
     workspaceModel: boolean;
     workspaceParent: string | null;
     tenant: boolean;

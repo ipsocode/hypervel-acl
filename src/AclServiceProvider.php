@@ -30,7 +30,6 @@ use Ipsocode\Acl\Support\Teams;
 use Ipsocode\Acl\Support\Workspaces;
 use Ipsocode\Acl\Workspaces\RequestWorkspaceResolver;
 use LogicException;
-use RuntimeException;
 use Symfony\Component\Console\Input\InputOption;
 
 class AclServiceProvider extends ServiceProvider
@@ -110,8 +109,8 @@ class AclServiceProvider extends ServiceProvider
 
         $this->loadViewsFrom(__DIR__ . '/../resources/views', 'acl');
 
-        // Hashed here, before the workers fork, so no request reads the bundle.
-        $this->app->instance(UiAssets::class, new UiAssets(Config::uiFrontend() === Frontend::Bundled ? (hash_file('xxh128', __DIR__ . '/../dist/app.js') ?: throw new RuntimeException('Unable to read the ACL UI bundle.')) : ''));
+        // The published bundle is hashed here, before the workers fork, so no request reads it.
+        $this->app->instance(UiAssets::class, Config::uiFrontend() === Frontend::Bundled ? UiAssets::from(public_path('vendor/acl')) : new UiAssets(''));
 
         // ResolveAcl comes first: the permission check reads the team and roles it sets.
         Route::middlewareGroup('acl.ui', [

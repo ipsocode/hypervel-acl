@@ -18,9 +18,7 @@ export interface Api {
     setWorkspace(workspace: string | null): void;
 }
 
-export const WORKSPACE_KEY = 'acl:workspace';
-
-/**
+export /**
  * The CSRF header the middleware accepts: the encrypted cookie goes in X-XSRF-TOKEN,
  * the plain meta token in X-CSRF-TOKEN.
  */
@@ -36,21 +34,14 @@ function csrfHeaders(): Record<string, string> {
     return meta ? { 'X-CSRF-TOKEN': meta } : {};
 }
 
-function storedWorkspace(): string | null {
-    try {
-        return sessionStorage.getItem(WORKSPACE_KEY);
-    } catch {
-        return null;
-    }
-}
-
 /**
  * The data layer both frontends share: the management controllers behind `{path}/acl-api`.
- * A 422 carries its field errors; any other failure its message.
+ * A 422 carries its field errors; any other failure its message. The workspace the session acts
+ * in is sent with every call; an empty one asks the server to forget the selection.
  */
-export function createApi(path: string): Api {
+export function createApi(path: string, initialWorkspace: string | null = null): Api {
     const base = `${path}/acl-api`;
-    let workspace = storedWorkspace();
+    let workspace = initialWorkspace;
 
     async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
         const headers: Record<string, string> = {
@@ -59,7 +50,7 @@ export function createApi(path: string): Api {
             ...csrfHeaders(),
         };
 
-        if (workspace) {
+        if (workspace !== null) {
             headers['X-Workspace'] = workspace;
         }
 
@@ -78,10 +69,14 @@ export function createApi(path: string): Api {
             return undefined as T;
         }
 
-        const data = await response.json().catch(() => ({}));
+        const data = await response.json().catch(() => null);
 
         if (!response.ok) {
-            throw new ApiError(response.status, data.message ?? response.statusText, data.errors ?? {});
+            throw new ApiError(response.status, data?.message ?? response.statusText, data?.errors ?? {});
+        }
+
+        if (data === null) {
+            throw new ApiError(response.status, 'The server did not answer with JSON.');
         }
 
         return data as T;
@@ -94,12 +89,6 @@ export function createApi(path: string): Api {
         delete: (url, query) => request('DELETE', query ? `${url}?${new URLSearchParams(query)}` : url),
         setWorkspace(value) {
             workspace = value;
-
-            try {
-                value === null ? sessionStorage.removeItem(WORKSPACE_KEY) : sessionStorage.setItem(WORKSPACE_KEY, value);
-            } catch {
-                // The selection then lasts until the page is reloaded.
-            }
         },
     };
 }

@@ -6,7 +6,6 @@ const fetchMock = vi.fn();
 
 beforeEach(() => {
     vi.stubGlobal('fetch', fetchMock);
-    sessionStorage.clear();
     document.cookie = 'XSRF-TOKEN=abc%3D; path=/';
 });
 
@@ -30,22 +29,40 @@ it('calls the internal API beneath the UI path with the session headers', async 
     expect(init.headers.Accept).toBe('application/json');
 });
 
-it('sends a body as JSON and the acting workspace as a header', async () => {
-    fetchMock.mockResolvedValue(reply(201, { data: {} }));
-    const api = createApi('/acl-admin');
+it('sends a body as JSON and the acting workspace with every call', async () => {
+    fetchMock.mockImplementation(async () => reply(201, { data: {} }));
+    const api = createApi('/acl-admin', '3');
 
-    api.setWorkspace('7');
     await api.post('roles', { name: 'auditor' });
 
     const init = fetchMock.mock.calls[0][1];
 
     expect(init.body).toBe('{"name":"auditor"}');
     expect(init.headers['Content-Type']).toBe('application/json');
-    expect(init.headers['X-Workspace']).toBe('7');
-    expect(sessionStorage.getItem('acl:workspace')).toBe('7');
+    expect(init.headers['X-Workspace']).toBe('3');
 
-    api.setWorkspace(null);
-    expect(sessionStorage.getItem('acl:workspace')).toBeNull();
+    api.setWorkspace('7');
+    await api.get('roles');
+    expect(fetchMock.mock.calls[1][1].headers['X-Workspace']).toBe('7');
+
+    // An empty one is sent too: it asks the server to forget the selection.
+    api.setWorkspace('');
+    await api.get('roles');
+    expect(fetchMock.mock.calls[2][1].headers['X-Workspace']).toBe('');
+});
+
+it('sends no workspace header until one is known', async () => {
+    fetchMock.mockResolvedValue(reply(200, { data: [] }));
+
+    await createApi('/acl-admin').get('roles');
+
+    expect(fetchMock.mock.calls[0][1].headers['X-Workspace']).toBeUndefined();
+});
+
+it('fails a successful answer that is not JSON, such as the app page', async () => {
+    fetchMock.mockResolvedValue(new Response('<html></html>', { status: 200 }));
+
+    await expect(createApi('/acl-admin').get('reach')).rejects.toMatchObject({ message: 'The server did not answer with JSON.' });
 });
 
 it('returns nothing for an empty response and puts a delete query on the URL', async () => {

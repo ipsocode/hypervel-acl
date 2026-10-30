@@ -8,7 +8,7 @@
 
     <title>ACL{{ config('app.name') ? ' - ' . config('app.name') : '' }}</title>
 
-    <link rel="stylesheet" href="{{ asset('vendor/acl/app.css') }}?v={{ $version }}">
+    <link rel="stylesheet" href="{{ asset('vendor/acl/app.css') }}{{ $version === '' ? '' : '?v=' . $version }}">
 </head>
 <body>
 <div id="acl"></div>
@@ -16,6 +16,6 @@
 <script>
     window.Acl = {{ Hypervel\Support\Js::from($props) }};
 </script>
-<script type="module" src="{{ asset('vendor/acl/app.js') }}?v={{ $version }}"></script>
+<script type="module" src="{{ asset('vendor/acl/app.js') }}{{ $version === '' ? '' : '?v=' . $version }}"></script>
 </body>
 </html>

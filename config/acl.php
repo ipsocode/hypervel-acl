@@ -135,8 +135,8 @@ return [
         'enabled' => (bool) env('ACL_UI_ENABLED', false),
 
         // "bundled": the package's React app, prebuilt. "react": the same pages as
-        // Inertia pages in your application. null: the API only.
-        'frontend' => env('ACL_UI_FRONTEND', 'bundled'),
+        // Inertia pages in your application. null, or an empty ACL_UI_FRONTEND: the API only.
+        'frontend' => env('ACL_UI_FRONTEND', 'bundled') ?: null,
 
         // The subdomain the UI answers on; null serves it under the application's domain.
         'domain' => env('ACL_UI_DOMAIN'),

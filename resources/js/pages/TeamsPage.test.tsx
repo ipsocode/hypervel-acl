@@ -10,7 +10,7 @@ import TeamsPage from './TeamsPage';
 
 afterEach(cleanup);
 
-const boot: Boot = { path: '/acl-admin', workspaces: false, workspaceModel: false, workspaceParent: null, tenant: false, guards: ['web'] };
+const boot: Boot = { path: '/acl-admin', workspaces: false, workspaceModel: false, workspaceParent: null, tenant: false, guards: ['web'], workspace: null };
 
 it('updates the team a failed save created instead of creating a second', async () => {
     const team = { id: 5, name: 'Ops', tenant: null, inherit_id: null, roles: [] };

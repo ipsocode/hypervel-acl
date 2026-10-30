@@ -6,9 +6,11 @@ namespace Ipsocode\Acl\Tests\Feature;
 
 use Hypervel\Contracts\Foundation\Application;
 use Hypervel\Inertia\Testing\AssertableInertia;
+use Hypervel\Support\Facades\ParallelTesting;
 use Hypervel\Support\ServiceProvider;
 use Hypervel\Testbench\Attributes\WithConfig;
 use Ipsocode\Acl\AclServiceProvider;
+use Ipsocode\Acl\Http\UiAssets;
 use Ipsocode\Acl\Models\AclTeam;
 use Ipsocode\Acl\Support\Config;
 use Ipsocode\Acl\Support\Frontend;
@@ -82,11 +84,12 @@ class UiTest extends TestCase
         $response = $this->get('acl-admin')
             ->assertOk()
             ->assertSee('<div id="acl"></div>', false)
-            ->assertSee('vendor/acl/app.js?v=' . hash_file('xxh128', __DIR__ . '/../../dist/app.js'), false);
+            ->assertSee('vendor/acl/app.js', false);
 
         $this->assertSame([
             'path' => '/acl-admin',
             'workspaces' => false,
+            'workspace' => null,
             'workspaceModel' => false,
             'workspaceParent' => null,
             'tenant' => false,
@@ -188,6 +191,31 @@ class UiTest extends TestCase
         $this->assertContains('pages/RolesPage.tsx', $published);
         $this->assertNotContains('app.tsx', $published);
         $this->assertSame([], array_filter($published, fn (string $file): bool => str_contains($file, '.test.')));
+    }
+
+    public function testTheVersionHashesThePublishedBundle(): void
+    {
+        $directory = ParallelTesting::tempDir() . '/acl-assets';
+        mkdir($directory, 0777, true);
+
+        try {
+            $this->assertSame('', UiAssets::from($directory)->version);
+
+            file_put_contents("{$directory}/app.js", 'one');
+            $js = UiAssets::from($directory)->version;
+            $this->assertNotSame('', $js);
+
+            // A change to the stylesheet alone changes the version too.
+            file_put_contents("{$directory}/app.css", 'a');
+            $both = UiAssets::from($directory)->version;
+            file_put_contents("{$directory}/app.css", 'b');
+
+            $this->assertNotSame($js, $both);
+            $this->assertNotSame($both, UiAssets::from($directory)->version);
+        } finally {
+            array_map('unlink', glob("{$directory}/*"));
+            rmdir($directory);
+        }
     }
 
     public function testAnUnknownPathOfTheInternalApiIsNotFound(): void
