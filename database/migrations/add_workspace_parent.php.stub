@@ -24,7 +24,7 @@ return new class extends Migration {
         $name = $workspace->getTable();
         $parent = Workspaces::parentColumn();
         $tenant = Teams::tenantColumn();
-        $key = KeyType::fromModel($model);
+        $key = KeyType::forMigration();
 
         if (! Schema::hasColumn($name, $parent)) {
             Schema::table($name, function (Blueprint $table) use ($name, $parent, $key, $workspace): void {

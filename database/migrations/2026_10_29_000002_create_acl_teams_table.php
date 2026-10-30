@@ -21,7 +21,7 @@ return new class extends Migration {
         $name = (new AclTeam)->getTable();
         $tenant = Teams::tenantColumn();
         $inherited = config()->string('acl.column_names.teams_inherit_key');
-        $key = KeyType::resolve();
+        $key = KeyType::forMigration();
 
         Schema::create($name, function (Blueprint $table) use ($name, $tenant, $inherited, $key): void {
             $key->primary($table);

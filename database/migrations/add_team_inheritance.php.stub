@@ -26,7 +26,7 @@ return new class extends Migration {
             return;
         }
 
-        $key = KeyType::fromModel($model);
+        $key = KeyType::forMigration();
 
         Schema::table($name, function (Blueprint $table) use ($name, $inherited, $key, $team): void {
             $key->reference($table, $inherited)->nullable()->constrained($name, $team->getKeyName());

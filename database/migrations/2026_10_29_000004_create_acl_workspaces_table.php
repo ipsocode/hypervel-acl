@@ -22,7 +22,7 @@ return new class extends Migration {
         $name = (new AclWorkspace)->getTable();
         $tenant = Teams::tenantColumn();
         $parent = Workspaces::parentColumn();
-        $key = KeyType::resolve();
+        $key = KeyType::forMigration();
 
         Schema::create($name, function (Blueprint $table) use ($name, $tenant, $parent, $key): void {
             $key->primary($table);
