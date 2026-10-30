@@ -38,21 +38,19 @@ return new class extends Migration {
 
         throw_if($teamForeignKey === '', 'Error: team_foreign_key on config/permission.php not loaded. Run [php artisan config:clear] and try again.');
 
-        if (! Schema::hasColumn($tableNames['permissions'], $column)) {
-            Schema::table($tableNames['permissions'], static function (Blueprint $table) use ($column): void {
+        foreach ([$tableNames['permissions'], $tableNames['roles']] as $name) {
+            if (Schema::hasColumn($name, $column)) {
+                continue;
+            }
+
+            // The key may already lead with a tenant, so it is dropped under the name it has now.
+            $key = $this->nameKey($name);
+
+            Schema::table($name, static function (Blueprint $table) use ($column, $key): void {
                 Workspaces::addColumn($table);
 
-                $table->dropUnique(['name', 'guard_name']);
-                $table->unique([$column, 'name', 'guard_name']);
-            });
-        }
-
-        if (! Schema::hasColumn($tableNames['roles'], $column)) {
-            Schema::table($tableNames['roles'], static function (Blueprint $table) use ($column, $teamForeignKey): void {
-                Workspaces::addColumn($table);
-
-                $table->dropUnique([$teamForeignKey, 'name', 'guard_name']);
-                $table->unique([$column, $teamForeignKey, 'name', 'guard_name']);
+                $table->dropUnique($key['name']);
+                $table->unique([$column, ...$key['columns']]);
             });
         }
 
@@ -134,6 +132,22 @@ return new class extends Migration {
 
         // A new assignment token stops checks from reading assignments cached before partitioning.
         $cache->forget(config()->string('permission.cache.keys.model_token', PermissionRegistrar::MODEL_CACHE_TOKEN_KEY));
+    }
+
+    /**
+     * Get the unique key that holds a role or permission name within a guard.
+     *
+     * @return array{name: string, columns: list<string>}
+     */
+    protected function nameKey(string $table): array
+    {
+        foreach (Schema::getIndexes($table) as $index) {
+            if ($index['unique'] && ! $index['primary'] && in_array('name', $index['columns'], true) && in_array('guard_name', $index['columns'], true)) {
+                return ['name' => $index['name'], 'columns' => $index['columns']];
+            }
+        }
+
+        throw new \RuntimeException("Error: no unique key on [{$table}] holds name and guard_name.");
     }
 
     /**
