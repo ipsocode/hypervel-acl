@@ -466,6 +466,24 @@ class WorkspaceTest extends WorkspaceTestCase
         $this->assertSame(0, $writes);
     }
 
+    public function testAddingAUserInACachedWorkspaceRunsNoAncestorQuery(): void
+    {
+        $ops = AclTeam::create(['name' => 'Ops']);
+        $ops->syncTeamRoles(['editor']);
+        $user = User::factory()->create();
+
+        $this->app->make(Reach::class)->ancestorsOf($this->branchA->id);
+
+        $queries = [];
+        DB::listen(function ($query) use (&$queries): void {
+            $queries[] = $query->sql;
+        });
+
+        $ops->addUser($user, $this->branchA->id);
+
+        $this->assertSame([], array_filter($queries, fn (string $sql): bool => str_contains($sql, 'select "parent_id" from "acl_workspaces"')));
+    }
+
     public function testANewWorkspaceIsCoveredByTheOrgRolesAboveIt(): void
     {
         $reach = $this->app->make(Reach::class);
