@@ -23,7 +23,7 @@ class EnsureOrgRolesAreUnrelated
     {
         $tenant = Teams::tenantColumn();
 
-        $held = DB::table(Teams::WORKSPACE_MEMBERS_TABLE)
+        $held = DB::table(Teams::ORGANIZATIONS_TABLE)
             ->where(Teams::userPivotKey(), $event->user->getKey())
             ->when($tenant !== null, fn ($query) => $query->where($tenant, $event->team->tenant()))
             // The same team in the same workspace is added again, not a second org role.

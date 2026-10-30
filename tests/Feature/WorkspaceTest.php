@@ -346,13 +346,13 @@ class WorkspaceTest extends WorkspaceTestCase
             }
         }
 
-        $this->assertSame(1, DB::table('acl_team_workspace_user')->where('user_id', $user->id)->count());
+        $this->assertSame(1, DB::table(Teams::ORGANIZATIONS_TABLE)->where('user_id', $user->id)->count());
 
         // A sibling chain is fine, and so is adding the same org role again.
         $sales->addUser($user, $this->south->id);
         $sales->addUser($user, $this->south->id);
 
-        $this->assertSame(2, DB::table('acl_team_workspace_user')->where('user_id', $user->id)->count());
+        $this->assertSame(2, DB::table(Teams::ORGANIZATIONS_TABLE)->where('user_id', $user->id)->count());
     }
 
     public function testAHomeOrgRoleExcludesEveryOtherOne(): void
@@ -379,7 +379,7 @@ class WorkspaceTest extends WorkspaceTestCase
         $ops->removeUser($user, $this->north->id);
 
         $this->assertSame(0, $this->rows($user, Workspace::HOME, $this->north, $this->branchA, $this->branchB));
-        $this->assertSame(0, DB::table('acl_team_workspace_user')->count());
+        $this->assertSame(0, DB::table(Teams::ORGANIZATIONS_TABLE)->count());
     }
 
     public function testRemovingOneOfATeamsOrgRolesRebuildsTheOthers(): void
@@ -488,8 +488,14 @@ class WorkspaceTest extends WorkspaceTestCase
     public function testTheWorkspaceTablesExist(): void
     {
         $this->assertTrue(Schema::hasTable('acl_workspaces'));
-        $this->assertTrue(Schema::hasTable('acl_team_workspace_user'));
-        $this->assertFalse(Schema::hasTable('acl_team_user'));
+        $this->assertTrue(Schema::hasTable(Teams::ORGANIZATIONS_TABLE));
         $this->assertTrue(Schema::hasColumn('roles', 'workspace_id'));
+    }
+
+    public function testTheOrgRolesAreKeyedByWorkspaceFirst(): void
+    {
+        $primary = collect(Schema::getIndexes(Teams::ORGANIZATIONS_TABLE))->firstWhere('primary', true);
+
+        $this->assertSame(['workspace_id', 'team_id', 'user_id'], $primary['columns']);
     }
 }

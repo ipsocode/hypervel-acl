@@ -22,7 +22,7 @@ Set `acl.workspace` to `true` and, if you want another name than `workspace_id`,
 
 Workspaces are flat by default: your application identifies them itself, and an org role applies only in its own workspace. To arrange them as a tree, set `acl.models.workspace` to `Ipsocode\Acl\Models\AclWorkspace`, or to your own model with a parent column (`parent_id`, or the name in `acl.column_names.workspace_parent`). An org role then also applies in every workspace beneath its own.
 
-With workspaces on, org roles are kept in the `acl_team_workspace_user` table instead of `acl_team_user`.
+Org roles are kept in the `acl_organizations` table, one row for each user, team and workspace. With workspaces off, every row is in the home workspace, and a user holds one.
 
 > [!WARNING]
 > The `acl:setup` migration rebuilds primary keys for MySQL, MariaDB and PostgreSQL. SQLite cannot drop a primary key, so create its permission tables partitioned from the start.
