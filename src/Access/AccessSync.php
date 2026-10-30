@@ -45,8 +45,7 @@ class AccessSync
     public function rebuildMember(Model $user, Team $team, bool $remove = false, int|string|null $workspace = null): void
     {
         $this->asTeam($team, function () use ($user, $team, $remove): void {
-            // One transaction, so a concurrent check never sees the roles detached and not yet attached.
-            DB::transaction(fn () => $user->syncRoles($remove ? [] : $this->rolesFor($team))); // @phpstan-ignore method.notFound (the user uses HasRoles)
+            $user->syncRoles($remove ? [] : $this->rolesFor($team)); // @phpstan-ignore method.notFound (the user uses HasRoles)
         }, $workspace ?? Workspace::id());
     }
 
