@@ -132,6 +132,22 @@ class TeamInheritanceTest extends TestCase
         $this->assertCount(1, $this->app->make(AccessSync::class)->dependents($a));
     }
 
+    public function testTheApiRejectsADuplicateTeamName(): void
+    {
+        $admins = AclTeam::create(['name' => 'Admins']);
+        $other = AclTeam::create(['name' => 'Other']);
+        $admin = User::factory()->create();
+
+        $admins->syncTeamRoles(['manager']);
+        $admins->addUser($admin);
+
+        $this->actingAs($admin);
+
+        $this->postJson('acl/teams', ['name' => 'Other'])->assertUnprocessable()->assertJsonValidationErrors('name');
+        $this->putJson("acl/teams/{$admins->id}", ['name' => 'Other'])->assertUnprocessable()->assertJsonValidationErrors('name');
+        $this->putJson("acl/teams/{$other->id}", ['name' => 'Other'])->assertOk();
+    }
+
     public function testTheApiRejectsAnInheritanceCycleOrAForeignTeam(): void
     {
         $admins = AclTeam::create(['name' => 'Admins']);
