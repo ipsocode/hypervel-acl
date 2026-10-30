@@ -13,3 +13,4 @@ composer.lock
 
 # Claude Code's local state, such as its settings and worktrees.
 /.claude
+/node_modules

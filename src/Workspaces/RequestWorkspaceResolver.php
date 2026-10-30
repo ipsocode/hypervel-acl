@@ -16,12 +16,20 @@ class RequestWorkspaceResolver implements WorkspaceResolver
 
     /**
      * Get the workspace from the X-Workspace header or the workspace route parameter, and keep it
-     * in the session as the user's selection; without either, the selection kept there.
+     * in the session as the user's selection; without either, the selection kept there. An empty
+     * header forgets the selection.
      */
     public function resolve(Request $request): int|string|null
     {
         $session = $request->hasSession() ? $request->session() : null;
-        $workspace = $request->header('X-Workspace') ?? $request->route('workspace');
+        $workspace = $request->header('X-Workspace');
+
+        if ($workspace === '') {
+            $session?->forget(self::SESSION_KEY);
+            $workspace = null;
+        }
+
+        $workspace ??= $request->route('workspace');
 
         if (is_int($workspace) || (is_string($workspace) && $workspace !== '')) {
             $session?->put(self::SESSION_KEY, $workspace);

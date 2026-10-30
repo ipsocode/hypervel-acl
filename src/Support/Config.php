@@ -9,6 +9,7 @@ use Hypervel\Contracts\Config\Repository;
 use Hypervel\Database\Eloquent\Model;
 use Ipsocode\Acl\Exceptions\TenantNotEnabled;
 use Ipsocode\Acl\Exceptions\WorkspaceNotEnabled;
+use ValueError;
 
 class Config
 {
@@ -119,5 +120,25 @@ class Config
     public static function workspaceColumn(): ?string
     {
         return self::repository()->get('acl.column_names.workspace_foreign_key');
+    }
+
+    /**
+     * Determine if the management UI is enabled with a frontend.
+     */
+    public static function uiEnabled(): bool
+    {
+        return self::repository()->boolean('acl.ui.enabled') && self::uiFrontend() !== null;
+    }
+
+    /**
+     * Get the frontend of the management UI, or null for the API only.
+     *
+     * @throws ValueError
+     */
+    public static function uiFrontend(): ?Frontend
+    {
+        $frontend = self::repository()->get('acl.ui.frontend');
+
+        return $frontend === null ? null : Frontend::from($frontend);
     }
 }

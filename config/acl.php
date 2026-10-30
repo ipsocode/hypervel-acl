@@ -119,4 +119,35 @@ return [
         'name' => 'acl.',
         'permissions' => [],
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | UI
+    |--------------------------------------------------------------------------
+    |
+    | The management UI loads only when "enabled". The assets of the "bundled"
+    | frontend are published with the acl-assets tag, the pages of "react" with
+    | acl-react. Keep "path" apart from the API's "routes.prefix".
+    |
+    */
+
+    'ui' => [
+        'enabled' => (bool) env('ACL_UI_ENABLED', false),
+
+        // "bundled": the package's React app, prebuilt. "react": the same pages as
+        // Inertia pages in your application. null, or an empty ACL_UI_FRONTEND: the API only.
+        'frontend' => env('ACL_UI_FRONTEND', 'bundled') ?: null,
+
+        // The subdomain the UI answers on; null serves it under the application's domain.
+        'domain' => env('ACL_UI_DOMAIN'),
+
+        // The URI path the UI is served from. Its internal API lives beneath it.
+        'path' => env('ACL_UI_PATH', 'acl-admin'),
+
+        // Assigned to every UI route, its internal API included.
+        'middleware' => ['web', 'auth'],
+
+        // The permission every UI route requires; remove it only if you replace the check.
+        'permission' => 'acl.ui',
+    ],
 ];
