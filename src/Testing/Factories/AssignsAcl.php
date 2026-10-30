@@ -74,6 +74,8 @@ trait AssignsAcl
 
     /**
      * Run the role and member steps once the models exist.
+     *
+     * @param Collection<int, Model> $instances
      */
     protected function callAfterCreating(Collection $instances, ?Model $parent = null): void
     {
