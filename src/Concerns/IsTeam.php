@@ -7,6 +7,7 @@ namespace Ipsocode\Acl\Concerns;
 use Closure;
 use Hypervel\Database\Eloquent\Model;
 use Hypervel\Permission\Traits\HasRoles;
+use Hypervel\Support\Arr;
 use Hypervel\Support\Facades\Date;
 use Hypervel\Support\Facades\DB;
 use Ipsocode\Acl\Access\AccessSync;
@@ -231,17 +232,21 @@ trait IsTeam
 
     /**
      * Remove a user from the team, taking the team's roles away; with workspaces on, only the
-     * org role held in the given workspace, or all of the team's when none is given.
+     * org roles held in the given workspace or workspaces, or all of the team's when none is given.
+     *
+     * @param null|int|list<int|string>|string $workspace
      */
-    public function removeUser(Model $user, int|string|null $workspace = null): void
+    public function removeUser(Model $user, int|string|array|null $workspace = null): void
     {
         $members = DB::table(Teams::ORGANIZATIONS_TABLE)->where(Teams::teamPivotKey(), $this->getKey())->where(Teams::userPivotKey(), $user->getKey());
 
-        (clone $members)->when($workspace !== null, fn ($query) => $query->where(Workspaces::column(), $workspace))->delete();
+        DB::transaction(function () use ($user, $workspace, $members): void {
+            (clone $members)->when($workspace !== null, fn ($query) => $query->whereIn(Workspaces::column(), Arr::wrap($workspace)))->delete();
 
-        app(AccessSync::class)->releaseMember($user, $this);
+            app(AccessSync::class)->releaseMember($user, $this);
 
-        // The user's roles under the team are gone in every workspace, so what remains is rebuilt.
-        $members->update(['updated_at' => Date::now()->format(Teams::DATE_FORMAT)]);
+            // The user's roles under the team are gone in every workspace, so what remains is rebuilt.
+            $members->update(['updated_at' => Date::now()->format(Teams::DATE_FORMAT)]);
+        });
     }
 }

@@ -124,9 +124,7 @@ class TeamController extends Controller
             $team->removeUser($user);
         } else {
             // Without a workspace, the org roles within the reach of the request's own.
-            foreach ($this->memberWorkspaces($team, $user->getKey()) as $workspace) {
-                $team->removeUser($user, $workspace);
-            }
+            $team->removeUser($user, $this->memberWorkspaces($team, $user->getKey()));
         }
 
         return response()->noContent();

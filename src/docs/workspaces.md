@@ -41,7 +41,10 @@ Each tenant has a `Globals` team, created the first time a team is. With workspa
 $ops->addUser($user, $north->id);
 
 $ops->removeUser($user, $north->id);
+$ops->removeUser($user, [$north->id, $south->id]);
 ```
+
+`removeUser` takes a workspace key, a list of them, or none for every org role the team holds. It removes them, and takes the member's roles away, in one transaction.
 
 A user may hold several org roles, in any teams, but not in workspaces that reference each other: the same workspace, one above or beneath the other, or the home workspace together with any other. Before the org role is written, the `OrgRoleAdding` event is dispatched and the package refuses a conflict with a `UserAlreadyInTeam` exception. Adding the same team in the same workspace again changes nothing.
 

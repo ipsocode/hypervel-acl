@@ -96,13 +96,11 @@ class Teams
         $column = static::tenantColumn();
         $tenant ??= Tenant::id();
 
-        return static::query()->withoutGlobalScope('acl_tenant')
-            ->when($column !== null, fn ($query) => $query->where($column, $tenant))
-            ->where('name', self::GLOBALS)
-            ->first() ?? static::model()::create([
-                'name' => self::GLOBALS,
-                ...($column === null ? [] : [$column => $tenant]),
-            ]);
+        $query = static::query()->withoutGlobalScope('acl_tenant');
+        $attributes = ['name' => self::GLOBALS, ...($column === null ? [] : [$column => $tenant])];
+
+        // Concurrent first calls can both miss, so a lost insert reads back the row that won.
+        return (clone $query)->where($attributes)->first() ?? $query->createOrFirst($attributes);
     }
 
     /**
