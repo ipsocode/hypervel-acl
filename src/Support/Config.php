@@ -118,6 +118,6 @@ class Config
      */
     public static function workspaceColumn(): ?string
     {
-        return self::repository()->get('acl.column_names.workspace');
+        return self::repository()->get('acl.column_names.workspace_foreign_key');
     }
 }

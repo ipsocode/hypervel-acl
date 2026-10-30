@@ -27,7 +27,7 @@ class Workspaces
     /**
      * Get the partition column of the permission tables.
      *
-     * @throws RuntimeException when acl.workspace is on and acl.column_names.workspace names no column
+     * @throws RuntimeException when acl.workspace is on and acl.column_names.workspace_foreign_key names no column
      */
     public static function column(): string
     {

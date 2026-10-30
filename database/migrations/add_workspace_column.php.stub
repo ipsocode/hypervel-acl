@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Hypervel\Database\Migrations\Migration;
 use Hypervel\Database\Schema\Blueprint;
 use Hypervel\Permission\PermissionRegistrar;
+use Hypervel\Support\Facades\DB;
 use Hypervel\Support\Facades\Schema;
 use Ipsocode\Acl\Support\Workspaces;
 
@@ -12,63 +13,127 @@ return new class extends Migration {
     /**
      * Run the migrations.
      *
-     * With acl.workspace on, adds the partition column to the five permission tables, wherever it
-     * is missing, and puts it first in their keys, as the framework's partitioned schema does.
-     * Existing rows land in the home workspace. The keys are rebuilt for MySQL, MariaDB and
-     * PostgreSQL; SQLite cannot drop a primary key, so create its tables partitioned instead.
+     * With acl.workspace on, adds the partition column to the five permission tables, wherever
+     * it is missing, and puts it first in their keys, as the framework's partitioned schema
+     * does. Existing rows land in the home workspace.
      */
     public function up(): void
     {
-        $column = Workspaces::column();
-        $names = config()->array('permission.table_names');
-        $columnNames = config()->array('permission.column_names');
-        $role = $columnNames['role_pivot_key'] ?? PermissionRegistrar::DEFAULT_ROLE_PIVOT_KEY;
-        $permission = $columnNames['permission_pivot_key'] ?? PermissionRegistrar::DEFAULT_PERMISSION_PIVOT_KEY;
-        $team = $columnNames['team_foreign_key'] ?? PermissionRegistrar::DEFAULT_TEAM_FOREIGN_KEY;
-        $morph = $columnNames['model_morph_key'];
-
-        if (Schema::hasColumn($names['roles'], $column)) {
+        if (! config()->boolean('acl.workspace')) {
             return;
         }
 
-        foreach (['roles', 'permissions', 'model_has_roles', 'model_has_permissions', 'role_has_permissions'] as $table) {
-            Schema::table($names[$table], static fn (Blueprint $blueprint) => Workspaces::addColumn($blueprint));
+        $tableNames = config()->get('permission.table_names');
+
+        throw_if(! is_array($tableNames) || $tableNames === [], 'Error: config/permission.php not loaded. Run [php artisan config:clear] and try again.');
+
+        $column = Workspaces::column();
+        $columnNames = config()->array('permission.column_names');
+        $pivotRole = $columnNames['role_pivot_key'] ?? PermissionRegistrar::DEFAULT_ROLE_PIVOT_KEY;
+        $pivotPermission = $columnNames['permission_pivot_key'] ?? PermissionRegistrar::DEFAULT_PERMISSION_PIVOT_KEY;
+        $teamForeignKey = array_key_exists('team_foreign_key', $columnNames)
+            ? $columnNames['team_foreign_key']
+            : PermissionRegistrar::DEFAULT_TEAM_FOREIGN_KEY;
+        $modelMorphKey = $columnNames['model_morph_key'];
+
+        throw_if($teamForeignKey === '', 'Error: team_foreign_key on config/permission.php not loaded. Run [php artisan config:clear] and try again.');
+
+        if (! Schema::hasColumn($tableNames['permissions'], $column)) {
+            Schema::table($tableNames['permissions'], static function (Blueprint $table) use ($column): void {
+                Workspaces::addColumn($table);
+
+                $table->dropUnique(['name', 'guard_name']);
+                $table->unique([$column, 'name', 'guard_name']);
+            });
         }
 
-        // The foreign keys need an index of their own before the primary keys they used are dropped.
-        Schema::table($names['role_has_permissions'], static function (Blueprint $table) use ($role, $permission): void {
-            $table->index($role, 'role_has_permissions_role_index');
-            $table->index($permission, 'role_has_permissions_permission_index');
-        });
+        if (! Schema::hasColumn($tableNames['roles'], $column)) {
+            Schema::table($tableNames['roles'], static function (Blueprint $table) use ($column, $teamForeignKey): void {
+                Workspaces::addColumn($table);
 
-        Schema::table($names['permissions'], static function (Blueprint $table) use ($column): void {
-            $table->dropUnique(['name', 'guard_name']);
-            $table->unique([$column, 'name', 'guard_name']);
-        });
+                $table->dropUnique([$teamForeignKey, 'name', 'guard_name']);
+                $table->unique([$column, $teamForeignKey, 'name', 'guard_name']);
+            });
+        }
 
-        Schema::table($names['roles'], static function (Blueprint $table) use ($column, $team): void {
-            $table->dropUnique([$team, 'name', 'guard_name']);
-            $table->unique([$column, $team, 'name', 'guard_name']);
-        });
+        if (! Schema::hasColumn($tableNames['role_has_permissions'], $column)) {
+            Schema::table($tableNames['role_has_permissions'], static function (Blueprint $table) use ($tableNames, $column, $pivotRole, $pivotPermission): void {
+                Workspaces::addColumn($table);
 
-        Schema::table($names['role_has_permissions'], static function (Blueprint $table) use ($column, $role, $permission): void {
-            $table->dropPrimary('role_has_permissions_permission_id_role_id_primary');
-            $table->primary([$column, $permission, $role], 'role_has_permissions_partition_primary');
-        });
+                if (DB::getDriverName() !== 'sqlite') {
+                    $table->dropForeign([$pivotPermission]);
+                    $table->dropForeign([$pivotRole]);
+                }
 
-        Schema::table($names['model_has_roles'], static function (Blueprint $table) use ($column, $team, $role, $morph): void {
-            $table->index($role, 'model_has_roles_role_index');
-            $table->dropPrimary('model_has_roles_role_model_type_primary');
-            $table->primary([$column, $team, $role, $morph, 'model_type'], 'model_has_roles_partition_primary');
-            $table->index([$column, 'model_type', $morph], 'model_has_roles_partition_subject_index');
-        });
+                $table->dropPrimary();
 
-        Schema::table($names['model_has_permissions'], static function (Blueprint $table) use ($column, $team, $permission, $morph): void {
-            $table->index($permission, 'model_has_permissions_permission_index');
-            $table->dropPrimary('model_has_permissions_permission_model_type_primary');
-            $table->primary([$column, $team, $permission, $morph, 'model_type'], 'model_has_permissions_partition_primary');
-            $table->index([$column, 'model_type', $morph], 'model_has_permissions_partition_subject_index');
-        });
+                $table->primary([$column, $pivotPermission, $pivotRole], 'role_has_permissions_partition_primary');
+
+                if (DB::getDriverName() !== 'sqlite') {
+                    $table->foreign($pivotPermission)
+                        ->references('id')
+                        ->on($tableNames['permissions'])
+                        ->cascadeOnDelete();
+
+                    $table->foreign($pivotRole)
+                        ->references('id')
+                        ->on($tableNames['roles'])
+                        ->cascadeOnDelete();
+                }
+            });
+        }
+
+        if (! Schema::hasColumn($tableNames['model_has_permissions'], $column)) {
+            Schema::table($tableNames['model_has_permissions'], static function (Blueprint $table) use ($tableNames, $column, $teamForeignKey, $modelMorphKey, $pivotPermission): void {
+                Workspaces::addColumn($table);
+
+                if (DB::getDriverName() !== 'sqlite') {
+                    $table->dropForeign([$pivotPermission]);
+                }
+
+                $table->dropPrimary();
+
+                $table->primary([$column, $teamForeignKey, $pivotPermission, $modelMorphKey, 'model_type'], 'model_has_permissions_permission_model_type_primary');
+                $table->index([$column, 'model_type', $modelMorphKey], 'model_has_permissions_partition_subject_index');
+
+                if (DB::getDriverName() !== 'sqlite') {
+                    $table->foreign($pivotPermission)
+                        ->references('id')
+                        ->on($tableNames['permissions'])
+                        ->cascadeOnDelete();
+                }
+            });
+        }
+
+        if (! Schema::hasColumn($tableNames['model_has_roles'], $column)) {
+            Schema::table($tableNames['model_has_roles'], static function (Blueprint $table) use ($tableNames, $column, $teamForeignKey, $modelMorphKey, $pivotRole): void {
+                Workspaces::addColumn($table);
+
+                if (DB::getDriverName() !== 'sqlite') {
+                    $table->dropForeign([$pivotRole]);
+                }
+
+                $table->dropPrimary();
+
+                $table->primary([$column, $teamForeignKey, $pivotRole, $modelMorphKey, 'model_type'], 'model_has_roles_role_model_type_primary');
+                $table->index([$column, 'model_type', $modelMorphKey], 'model_has_roles_partition_subject_index');
+
+                if (DB::getDriverName() !== 'sqlite') {
+                    $table->foreign($pivotRole)
+                        ->references('id')
+                        ->on($tableNames['roles'])
+                        ->cascadeOnDelete();
+                }
+            });
+        }
+
+        $cacheStore = config()->string('permission.cache.store', 'default');
+        $cache = app('cache')->store($cacheStore !== 'default' ? $cacheStore : null);
+
+        $cache->forget(config()->string('permission.cache.keys.roles', PermissionRegistrar::ROLE_CATALOG_CACHE_KEY));
+
+        // A new assignment token stops checks from reading assignments cached before partitioning.
+        $cache->forget(config()->string('permission.cache.keys.model_token', PermissionRegistrar::MODEL_CACHE_TOKEN_KEY));
     }
 
     /**

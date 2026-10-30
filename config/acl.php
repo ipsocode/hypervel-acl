@@ -45,8 +45,8 @@ return [
     | Column Names
     |--------------------------------------------------------------------------
     |
-    | "workspace" is the column that partitions hypervel/permission's tables, required
-    | when "workspace" below is true; workspace 0 is the home workspace. "workspace_parent"
+    | "workspace_foreign_key" is the column that partitions hypervel/permission's tables when
+    | "workspace" below is true; workspace 0 is the home workspace. "workspace_parent"
     | is the column of the workspace model that holds the workspace it is beneath.
     | "tenant_foreign_key" is the column of the team table that holds the tenant a team
     | belongs to; leave it null for a single tenant. A user is in one team per tenant.
@@ -54,7 +54,7 @@ return [
     */
 
     'column_names' => [
-        'workspace' => null,
+        'workspace_foreign_key' => 'workspace_id',
         'workspace_parent' => 'parent_id',
         'teams_inherit_key' => 'inherit_id',
         'tenant_foreign_key' => null,

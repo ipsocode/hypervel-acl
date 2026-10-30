@@ -18,7 +18,7 @@ Workspaces are optional. With `acl.workspace` off, nothing described here exists
 <a name="configuration"></a>
 ## Configuration
 
-Set `acl.workspace` to `true` and name the partition column in `acl.column_names.workspace`. Run `php artisan acl:setup` to generate the migration that adds the column to the permission tables; it puts the column first in their keys and gives existing rows the home workspace.
+Set `acl.workspace` to `true` and, if you want another name than `workspace_id`, set the partition column in `acl.column_names.workspace_foreign_key`. Run `php artisan acl:setup` to generate the migration that adds the column to the permission tables; it puts the column first in their keys and gives existing rows the home workspace.
 
 Workspaces are flat by default: your application identifies them itself, and an org role applies only in its own workspace. To arrange them as a tree, set `acl.models.workspace` to `Ipsocode\Acl\Models\AclWorkspace`, or to your own model with a parent column (`parent_id`, or the name in `acl.column_names.workspace_parent`). An org role then also applies in every workspace beneath its own.
 

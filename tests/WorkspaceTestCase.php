@@ -22,7 +22,7 @@ abstract class WorkspaceTestCase extends TestCase
         $config = $app->get('config');
 
         $config->set('acl.workspace', true);
-        $config->set('acl.column_names.workspace', 'workspace_id');
+        $config->set('acl.column_names.workspace_foreign_key', 'workspace_id');
         $config->set('acl.models.workspace', AclWorkspace::class);
 
         // Providers register before this runs; a real application's config is loaded before them.
