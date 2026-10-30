@@ -5,6 +5,8 @@ import type { Errors, Role, Team } from '../types';
 import { Badge, Button, Card, Empty, Field, FormError, Input, Select, attempt, errorsOf, useAcl } from '../ui';
 
 export default function TeamsPage() {
+    const { boot } = useAcl();
+    const column = boot.teamInherit;
     const teams = useCollection<Team>('teams');
     const roles = useCollection<Role>('roles');
     const [selected, setSelected] = useState<Team | 'new' | null>(null);
@@ -25,7 +27,7 @@ export default function TeamsPage() {
                                 >
                                     {team.name}
                                     <span className="flex flex-wrap justify-end gap-1">
-                                        {team.inherit_id !== null && <Badge tone="indigo">inherits {teams.items?.find((other) => other.id === team.inherit_id)?.name ?? team.inherit_id}</Badge>}
+                                        {team[column] !== null && <Badge tone="indigo">inherits {teams.items?.find((other) => other.id === team[column])?.name ?? String(team[column])}</Badge>}
                                         {team.roles.map((role) => (
                                             <Badge key={role}>{role}</Badge>
                                         ))}
@@ -43,6 +45,7 @@ export default function TeamsPage() {
                 </Card>
             ) : (
                 <TeamEditor
+                    column={column}
                     key={selected === 'new' ? 'new' : selected.id}
                     team={selected === 'new' ? null : selected}
                     teams={teams.items ?? []}
@@ -61,10 +64,10 @@ export default function TeamsPage() {
     );
 }
 
-function TeamEditor({ team, teams, roles, onSaved, onDeleted }: { team: Team | null; teams: Team[]; roles: Role[]; onSaved: (team: Team) => Promise<void>; onDeleted: () => Promise<void> }) {
+function TeamEditor({ column, team, teams, roles, onSaved, onDeleted }: { column: string; team: Team | null; teams: Team[]; roles: Role[]; onSaved: (team: Team) => Promise<void>; onDeleted: () => Promise<void> }) {
     const { api, boot } = useAcl();
     const [name, setName] = useState(team?.name ?? '');
-    const [inherit, setInherit] = useState(team?.inherit_id === null || team === null ? '' : String(team.inherit_id));
+    const [inherit, setInherit] = useState(team === null || team[column] === null ? '' : String(team[column]));
     const [granted, setGranted] = useState<string[]>(team?.roles ?? []);
     const [errors, setErrors] = useState<Errors>({});
     const [saved, setSaved] = useState(false);
@@ -76,7 +79,7 @@ function TeamEditor({ team, teams, roles, onSaved, onDeleted }: { team: Team | n
         setSaved(false);
 
         try {
-            const body = { name, inherit_id: inherit === '' ? null : inherit };
+            const body = { name, [column]: inherit === '' ? null : inherit };
             const existing = team ?? created.current;
             const response = existing ? await api.put<{ data: Team }>(`teams/${existing.id}`, body) : await api.post<{ data: Team }>('teams', body);
 
@@ -118,7 +121,7 @@ function TeamEditor({ team, teams, roles, onSaved, onDeleted }: { team: Team | n
                     <Field label="Name" name="name" errors={errors}>
                         <Input value={name} onChange={(event) => setName(event.target.value)} required />
                     </Field>
-                    <Field label="Inherits the roles of" name="inherit_id" errors={errors}>
+                    <Field label="Inherits the roles of" name={column} errors={errors}>
                         <Select value={inherit} onChange={(event) => setInherit(event.target.value)}>
                             <option value="">No team</option>
                             {teams

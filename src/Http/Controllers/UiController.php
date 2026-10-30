@@ -28,6 +28,7 @@ class UiController extends Controller
             'workspace' => Workspaces::enabled() ? Workspace::id() : null,
             'workspaceModel' => Workspaces::enabled() && Workspaces::model() !== null,
             'workspaceParent' => Workspaces::enabled() ? Workspaces::parentColumn() : null,
+            'teamInherit' => Config::teamsInheritKey(),
             'tenant' => Teams::tenantColumn() !== null,
             'guards' => Config::guards(),
         ];
