@@ -466,6 +466,28 @@ class WorkspaceTest extends WorkspaceTestCase
         $this->assertSame($ops->id, $own->inherit_id);
     }
 
+    public function testAGlobalsTeamCreatedByAConcurrentRequestIsReadBack(): void
+    {
+        $column = Teams::tenantColumn();
+        $missed = false;
+
+        // The other request's insert has landed, but this request's lookup missed it.
+        DB::table((new AclTeam)->getTable())->insert(['name' => Teams::GLOBALS, ...($column === null ? [] : [$column => Tenant::id()])]);
+
+        AclTeam::addGlobalScope('missed', function ($query) use (&$missed): void {
+            if (! $missed) {
+                $missed = true;
+                $query->whereRaw('1 = 0');
+            }
+        });
+
+        $globals = Teams::globals();
+
+        $this->assertTrue($missed);
+        $this->assertSame(1, AclTeam::query()->withoutGlobalScope('missed')->where('name', Teams::GLOBALS)->count());
+        $this->assertTrue($globals->is(Teams::globals()));
+    }
+
     public function testGlobalsRolesReachEveryMembersWorkspace(): void
     {
         Teams::globals()->syncTeamRoles(['viewer']);
