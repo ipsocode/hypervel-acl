@@ -4,6 +4,7 @@ export interface Boot {
     workspace: number | string | null;
     workspaceModel: boolean;
     workspaceParent: string | null;
+    teamInherit: string;
     tenant: boolean;
     guards: string[];
 }
@@ -26,8 +27,8 @@ export interface Team {
     id: number | string;
     name: string;
     tenant: number | string | null;
-    inherit_id: number | string | null;
     roles: string[];
+    [inherit: string]: number | string | string[] | null;
 }
 
 export interface Workspace {
