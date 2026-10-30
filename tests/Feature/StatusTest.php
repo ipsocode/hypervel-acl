@@ -35,4 +35,13 @@ class StatusTest extends TestCase
 
         $this->artisan('acl:status')->expectsOutputToContain('names no column')->assertExitCode(1);
     }
+
+    public function testStatusReportsTheKeyTypeAndFailsWhenItDiffersFromThePermissionsTable(): void
+    {
+        $this->artisan('acl:status')->expectsOutputToContain('Key type')->assertExitCode(0);
+
+        config(['acl.key_type' => 'uuid']);
+
+        $this->artisan('acl:status')->expectsOutputToContain('permissions table uses id keys')->assertExitCode(1);
+    }
 }

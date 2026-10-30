@@ -39,17 +39,25 @@ enum KeyType: string
             return self::from($configured);
         }
 
+        return self::fromPermissionsTable() ?? self::fromModel(config('permission.models.role'));
+    }
+
+    /**
+     * Get the key type of the permissions table's id column, or null when the table is missing or names none.
+     */
+    public static function fromPermissionsTable(): ?self
+    {
         $table = config('permission.table_names.permissions');
 
         if (Schema::hasTable($table)) {
             foreach (Schema::getColumns($table) as $column) {
                 if ($column['name'] === 'id') {
-                    return self::fromColumn($column['type'], $column['type_name']) ?? self::fromModel(config('permission.models.role'));
+                    return self::fromColumn($column['type'], $column['type_name']);
                 }
             }
         }
 
-        return self::fromModel(config('permission.models.role'));
+        return null;
     }
 
     /**

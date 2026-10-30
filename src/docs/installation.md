@@ -35,7 +35,7 @@ php artisan acl:setup --force
 
 When the permission config is not published, an interactive run also offers to publish it (`vendor:publish --tag=permission-config`). Set `permission.teams` to `true` in the published file and run the command again, since the config is read at boot. Under `--no-interaction` it only prints the message.
 
-`acl:status` prints the permission package state, which of teams, tenant and workspace are on, the team and workspace models, the guards, and whether each migration the setup generates is published or pending. It exits non-zero, with the reason printed, when the permission package is not active or `acl.tenant` is on without a tenant column, so CI can use it:
+`acl:status` prints the permission package state, which of teams, tenant and workspace are on, the team and workspace models, the guards, the key type of the package's tables, and whether each migration the setup generates is published or pending. It exits non-zero, with the reason printed, when the permission package is not active `acl.tenant` is on without a tenant column, or `acl.key_type` differs from the permissions table's key type, so CI can use it:
 
 ```sh
 php artisan acl:status
