@@ -27,7 +27,7 @@ trait ChecksPermissionPackage
         }
 
         if (! $config->boolean('permission.teams')) {
-            return 'The permission package has teams off: run php artisan permission:setup-teams and set permission.teams to true.';
+            return 'The permission package has teams off: set permission.teams to true, then run php artisan permission:setup-teams if the permission tables already exist.';
         }
 
         if ($migrated && ! Schema::hasTable($config->string('permission.table_names.roles'))) {

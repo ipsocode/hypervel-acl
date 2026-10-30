@@ -108,7 +108,7 @@ class SetupTest extends TestCase
     public function testSetupFailsWithAnActionableMessageWhenThePermissionPackageIsNotActive(): void
     {
         config(['permission.teams' => false]);
-        $this->artisan('acl:setup')->expectsOutputToContain('permission:setup-teams')->assertExitCode(1);
+        $this->artisan('acl:setup')->expectsOutputToContain('set permission.teams to true, then run php artisan permission:setup-teams')->assertExitCode(1);
 
         config(['permission.teams' => true, 'permission.table_names.roles' => null]);
         $this->artisan('acl:setup')->expectsOutputToContain('--tag=permission-config')->assertExitCode(1);
