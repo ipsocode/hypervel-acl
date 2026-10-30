@@ -74,11 +74,11 @@ return [
     | else the one the configured role model uses, else the user model's. The user
     | model's key must be the type of the morph key columns of the permission
     | tables. With the tables not migrated yet, "acl:setup" asks which type to use
-    | and writes it to ACL_KEY_TYPE in your .env file.
+    | and sets it here.
     |
     */
 
-    'key_type' => env('ACL_KEY_TYPE') ?: null,
+    'key_type' => null,
 
     /*
     |--------------------------------------------------------------------------

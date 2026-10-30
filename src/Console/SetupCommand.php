@@ -15,6 +15,8 @@ use Ipsocode\Acl\Support\Config;
 use Ipsocode\Acl\Support\Frontend;
 use Ipsocode\Acl\Support\KeyType;
 
+use function Hypervel\Prompts\select;
+
 class SetupCommand extends Command
 {
     use ChecksPermissionPackage;
@@ -124,7 +126,7 @@ class SetupCommand extends Command
     }
 
     /**
-     * Ask which key type the package's tables use, when nothing decides it yet, and keep the answer in .env.
+     * Ask which key type the package's tables use, when nothing decides it yet, and set it in the application's acl config.
      *
      * The permission tables decide it once they exist, and a script is never asked.
      */
@@ -134,23 +136,30 @@ class SetupCommand extends Command
             return;
         }
 
-        /** @var string $type */
-        $type = $this->choice(
-            'Which key type should the package\'s tables use? The user model\'s key must be the same type as the morph key of the permission tables',
-            array_column(KeyType::cases(), 'value'),
-            KeyType::forMigration()->value,
+        $type = select(
+            label: 'Which key type should the package\'s tables use?',
+            options: array_column(KeyType::cases(), 'value'),
+            default: KeyType::forMigration()->value,
+            hint: 'The user model\'s key must be the same type as the morph key of the permission tables.',
         );
 
-        $path = $this->hypervel->environmentFilePath();
-        $contents = File::exists($path) ? File::get($path) : '';
+        if (! File::exists(config_path('acl.php'))) {
+            $this->call('vendor:publish', ['--tag' => 'acl-config']);
+        }
 
-        File::put($path, preg_match('/^ACL_KEY_TYPE=.*$/m', $contents) === 1
-            ? preg_replace('/^ACL_KEY_TYPE=.*$/m', "ACL_KEY_TYPE={$type}", $contents)
-            : $contents . ($contents === '' || str_ends_with($contents, "\n") ? '' : "\n") . "ACL_KEY_TYPE={$type}\n");
+        $contents = File::get(config_path('acl.php'));
+
+        if (preg_match("/'key_type' => null,/", $contents) !== 1) {
+            $this->warn("Set 'key_type' => '{$type}' in config/acl.php: it is not null there, so it was left as it is.");
+
+            return;
+        }
+
+        File::put(config_path('acl.php'), str_replace("'key_type' => null,", "'key_type' => '{$type}',", $contents));
 
         config(['acl.key_type' => $type]);
 
-        $this->info("ACL_KEY_TYPE={$type} was written to {$path}.");
+        $this->info("'key_type' was set to '{$type}' in config/acl.php.");
     }
 
     /**
