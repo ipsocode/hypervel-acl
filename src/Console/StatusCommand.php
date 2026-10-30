@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Ipsocode\Acl\Console;
 
 use Hypervel\Console\Command;
+use Hypervel\Permission\Guard;
+use Hypervel\Support\Facades\Schema;
 use Ipsocode\Acl\Console\Concerns\ChecksPermissionPackage;
 use Ipsocode\Acl\Console\Concerns\FindsTeamMigrations;
 use Ipsocode\Acl\Support\Config;
@@ -27,8 +29,9 @@ class StatusCommand extends Command
     public function handle(): int
     {
         $problems = [];
+        $active = ($problem = $this->permissionPackageProblem()) === null;
 
-        if (($problem = $this->permissionPackageProblem()) !== null) {
+        if (! $active) {
             $problems[] = $problem;
         }
 
@@ -43,8 +46,10 @@ class StatusCommand extends Command
             $problems[] = "acl.key_type is {$configured} but the permissions table uses {$actual->value} keys: set it to null or to {$actual->value}.";
         }
 
+        $problems = [...$problems, ...$this->userTableProblems()];
+
         $this->table(['Setting', 'Value'], [
-            ['Permission package', $problems === [] ? 'active' : 'not active'],
+            ['Permission package', $active ? 'active' : 'not active'],
             ['Teams', $this->state(config('permission.teams') === true)],
             ['Tenant', $this->state(Config::tenantEnabled())],
             ['Workspace', $this->state(Workspaces::enabled())],
@@ -85,5 +90,34 @@ class StatusCommand extends Command
     protected function published(string $stub): string
     {
         return $this->alreadyExistingMigrations($stub) === [] ? 'pending' : 'published';
+    }
+
+    /**
+     * Describe what is wrong with the users table the org roles table references.
+     *
+     * @return list<string>
+     */
+    protected function userTableProblems(): array
+    {
+        $guard = Config::guards()[0];
+
+        if (($model = Guard::getModelForGuard($guard)) === null) {
+            return ["The {$guard} guard has no user model: set the model of its auth provider."];
+        }
+
+        $user = new $model;
+
+        if (! Schema::hasTable($user->getTable())) {
+            return ["The users table {$user->getTable()} does not exist: the org roles table references it, so migrate it first."];
+        }
+
+        $column = KeyType::fromTable($user->getTable(), $user->getKeyName());
+        $generated = KeyType::fromModel($model);
+
+        if ($column === null || $column === $generated) {
+            return [];
+        }
+
+        return ["The {$user->getTable()} table uses {$column->value} keys but {$model} generates {$generated->value} keys: the org roles table copies the model's, so give the model the matching HasUuids or HasUlids trait."];
     }
 }
