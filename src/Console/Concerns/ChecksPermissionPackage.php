@@ -104,8 +104,17 @@ trait ChecksPermissionPackage
             return;
         }
 
-        if ($this->confirm('Run acl:setup now to publish the permission migrations?', true)
-            && $this->call('acl:setup') === self::SUCCESS) {
+        if ($this->confirm('Run acl:setup now to publish the permission migrations?', true)) {
+            $this->runPermissionSetup();
+        }
+    }
+
+    /**
+     * Run acl:setup, and say what is next when it published the permission migration.
+     */
+    protected function runPermissionSetup(): void
+    {
+        if ($this->call('acl:setup') === self::SUCCESS && $this->permissionMigrationPublished()) {
             $this->info('Run php artisan migrate, then run this command again.');
         }
     }
