@@ -166,7 +166,7 @@ class AccessSync
 
         // The model's own date format keeps the milliseconds a bulk touch() would round away.
         Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($keys)->toBase()
-            ->update([$model->getUpdatedAtColumn() => $model->freshTimestampString()]);
+            ->update([(string) $model->getUpdatedAtColumn() => $model->freshTimestampString()]);
     }
 
     /**
