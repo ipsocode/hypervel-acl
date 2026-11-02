@@ -1,2 +1,205 @@
 parameters:
-    ignoreErrors: []
+	ignoreErrors:
+		-
+			message: '#^Parameter \#1 \$column of method Hypervel\\Database\\Eloquent\\Builder\<Hypervel\\Database\\Eloquent\\Model&Ipsocode\\Acl\\Contracts\\Team\>\:\:pluck\(\) expects Hypervel\\Contracts\\Database\\Query\\Expression\|string, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Access/AccessSync.php
+
+		-
+			message: '#^Cannot call method get\(\) on Hypervel\\Contracts\\Foundation\\Application\|null\.$#'
+			identifier: method.nonObject
+			count: 2
+			path: src/Console/MakeAclSeederCommand.php
+
+		-
+			message: '#^Cannot call method hasOption\(\) on Symfony\\Component\\Console\\Input\\InputInterface\|null\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: src/Console/MakeAclSeederCommand.php
+
+		-
+			message: '#^Cannot call method isInteractive\(\) on Symfony\\Component\\Console\\Input\\InputInterface\|null\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: src/Console/MakeAclSeederCommand.php
+
+		-
+			message: '#^Cannot call method providerIsLoaded\(\) on Hypervel\\Contracts\\Foundation\\Application\|null\.$#'
+			identifier: method.nonObject
+			count: 2
+			path: src/Console/MakeAclSeederCommand.php
+
+		-
+			message: '#^Cannot call method addSecond\(\) on Carbon\\CarbonInterface\|null\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: src/Console/SetupCommand.php
+
+		-
+			message: '#^Cannot call method get\(\) on Hypervel\\Contracts\\Foundation\\Application\|null\.$#'
+			identifier: method.nonObject
+			count: 2
+			path: src/Console/SetupCommand.php
+
+		-
+			message: '#^Cannot call method hasOption\(\) on Symfony\\Component\\Console\\Input\\InputInterface\|null\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: src/Console/SetupCommand.php
+
+		-
+			message: '#^Cannot call method isInteractive\(\) on Symfony\\Component\\Console\\Input\\InputInterface\|null\.$#'
+			identifier: method.nonObject
+			count: 3
+			path: src/Console/SetupCommand.php
+
+		-
+			message: '#^Cannot call method providerIsLoaded\(\) on Hypervel\\Contracts\\Foundation\\Application\|null\.$#'
+			identifier: method.nonObject
+			count: 2
+			path: src/Console/SetupCommand.php
+
+		-
+			message: '#^Cannot call method get\(\) on Hypervel\\Contracts\\Foundation\\Application\|null\.$#'
+			identifier: method.nonObject
+			count: 2
+			path: src/Console/StatusCommand.php
+
+		-
+			message: '#^Cannot call method hasOption\(\) on Symfony\\Component\\Console\\Input\\InputInterface\|null\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: src/Console/StatusCommand.php
+
+		-
+			message: '#^Cannot call method isInteractive\(\) on Symfony\\Component\\Console\\Input\\InputInterface\|null\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: src/Console/StatusCommand.php
+
+		-
+			message: '#^Cannot call method providerIsLoaded\(\) on Hypervel\\Contracts\\Foundation\\Application\|null\.$#'
+			identifier: method.nonObject
+			count: 2
+			path: src/Console/StatusCommand.php
+
+		-
+			message: '#^Parameter \#2 \$column of static method Ipsocode\\Acl\\Support\\KeyType\:\:fromTable\(\) expects string, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Console/StatusCommand.php
+
+		-
+			message: '#^Method Ipsocode\\Acl\\Http\\Controllers\\TeamController\:\:userModel\(\) should return class\-string\<Hypervel\\Database\\Eloquent\\Model\> but returns class\-string\<Hypervel\\Database\\Eloquent\\Model\>\|null\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Http/Controllers/TeamController.php
+
+		-
+			message: '#^Cannot access property \$changed on stdClass\|null\.$#'
+			identifier: property.nonObject
+			count: 1
+			path: src/Http/Middleware/ResolveAcl.php
+
+		-
+			message: '#^Cannot access property \$team on stdClass\|null\.$#'
+			identifier: property.nonObject
+			count: 3
+			path: src/Http/Middleware/ResolveAcl.php
+
+		-
+			message: '#^Cannot access property \$workspace on stdClass\|null\.$#'
+			identifier: property.nonObject
+			count: 1
+			path: src/Http/Middleware/ResolveAcl.php
+
+		-
+			message: '#^Parameter \#1 \$column of method Hypervel\\Database\\Eloquent\\Builder\<Hypervel\\Database\\Eloquent\\Model&Ipsocode\\Acl\\Contracts\\Team\>\:\:where\(\) expects array\|\(Closure\(Hypervel\\Database\\Eloquent\\Builder\<Hypervel\\Database\\Eloquent\\Model&Ipsocode\\Acl\\Contracts\\Team\>\)\: mixed\)\|Hypervel\\Contracts\\Database\\Query\\Expression\|Hypervel\\Database\\Eloquent\\Builder\|Hypervel\\Database\\Eloquent\\Relations\\Relation\<\*, \*, \*\>\|Hypervel\\Database\\Query\\Builder\|string, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Http/Requests/TeamRequest.php
+
+		-
+			message: '#^Parameter \#1 \$column of method Hypervel\\Database\\Eloquent\\Builder\<Hypervel\\Database\\Eloquent\\Model\>\:\:where\(\) expects array\|\(Closure\(Hypervel\\Database\\Eloquent\\Builder\<Hypervel\\Database\\Eloquent\\Model\>\)\: mixed\)\|Hypervel\\Contracts\\Database\\Query\\Expression\|Hypervel\\Database\\Eloquent\\Builder\|Hypervel\\Database\\Eloquent\\Relations\\Relation\<\*, \*, \*\>\|Hypervel\\Database\\Query\\Builder\|string, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Http/Requests/WorkspaceRequest.php
+
+		-
+			message: '#^Parameter \#1 \$key of method Hypervel\\Database\\Eloquent\\Model\:\:getAttribute\(\) expects string, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Http/Requests/WorkspaceRequest.php
+
+		-
+			message: '#^Parameter \#1 \$keys of static method Ipsocode\\Acl\\Support\\Workspaces\:\:descendantKeys\(\) expects list\<int\|string\>, array\{int\|string\|null\} given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Http/Rules/WorkspaceParent.php
+
+		-
+			message: '#^Parameter \#1 \$column of method Hypervel\\Database\\Query\\Builder\<int,stdClass,string\>\:\:where\(\) expects array\|Closure\|Hypervel\\Contracts\\Database\\Query\\Expression\|Hypervel\\Database\\Eloquent\\Builder\|Hypervel\\Database\\Eloquent\\Relations\\Relation\|Hypervel\\Database\\Query\\Builder\|string, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Listeners/EnsureOrgRolesAreUnrelated.php
+
+		-
+			message: '#^Method Ipsocode\\Acl\\Models\\AclTeam\:\:uniqueIds\(\) should return array\<int, string\> but returns list\<string\|null\>\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Models/AclTeam.php
+
+		-
+			message: '#^Parameter \#1 \$column of method Hypervel\\Database\\Eloquent\\Builder\<Hypervel\\Database\\Eloquent\\Model\>\:\:value\(\) expects Hypervel\\Contracts\\Database\\Query\\Expression\|string, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Models/AclTeam.php
+
+		-
+			message: '#^Parameter \#1 \$column of method Hypervel\\Database\\Query\\Builder\<int,stdClass,string\>\:\:where\(\) expects array\|Closure\|Hypervel\\Contracts\\Database\\Query\\Expression\|Hypervel\\Database\\Eloquent\\Builder\|Hypervel\\Database\\Eloquent\\Relations\\Relation\|Hypervel\\Database\\Query\\Builder\|string, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Models/AclTeam.php
+
+		-
+			message: '#^Method Ipsocode\\Acl\\Models\\AclWorkspace\:\:uniqueIds\(\) should return array\<int, string\> but returns list\<string\|null\>\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Models/AclWorkspace.php
+
+		-
+			message: '#^Method Ipsocode\\Acl\\Models\\Permission\:\:uniqueIds\(\) should return array\<int, string\> but returns list\<string\|null\>\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Models/Permission.php
+
+		-
+			message: '#^Method Ipsocode\\Acl\\Models\\Role\:\:uniqueIds\(\) should return array\<int, string\> but returns list\<string\|null\>\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Models/Role.php
+
+		-
+			message: '#^Parameter \#1 \$column of method Hypervel\\Database\\Eloquent\\Builder\<Hypervel\\Database\\Eloquent\\Model&Ipsocode\\Acl\\Contracts\\Team\>\:\:where\(\) expects array\|\(Closure\(Hypervel\\Database\\Eloquent\\Builder\<Hypervel\\Database\\Eloquent\\Model&Ipsocode\\Acl\\Contracts\\Team\>\)\: mixed\)\|Hypervel\\Contracts\\Database\\Query\\Expression\|Hypervel\\Database\\Eloquent\\Builder\|Hypervel\\Database\\Eloquent\\Relations\\Relation\<\*, \*, \*\>\|Hypervel\\Database\\Query\\Builder\|string, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Support/Teams.php
+
+		-
+			message: '#^Parameter \#1 \$column of method Hypervel\\Database\\Eloquent\\Builder\<Hypervel\\Database\\Eloquent\\Model\>\:\:pluck\(\) expects Hypervel\\Contracts\\Database\\Query\\Expression\|string, string\|null given\.$#'
+			identifier: argument.type
+			count: 2
+			path: src/Support/Workspaces.php
+
+		-
+			message: '#^Parameter \#1 \$column of method Hypervel\\Database\\Eloquent\\Builder\<Hypervel\\Database\\Eloquent\\Model\>\:\:value\(\) expects Hypervel\\Contracts\\Database\\Query\\Expression\|string, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: tests/PHPStan/Fixtures/Fixtures.php
+
+		-
+			message: '#^Parameter \#1 \$column of method Hypervel\\Database\\Query\\Builder\<int,stdClass,string\>\:\:where\(\) expects array\|Closure\|Hypervel\\Contracts\\Database\\Query\\Expression\|Hypervel\\Database\\Eloquent\\Builder\|Hypervel\\Database\\Eloquent\\Relations\\Relation\|Hypervel\\Database\\Query\\Builder\|string, string\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: tests/PHPStan/Fixtures/Fixtures.php
