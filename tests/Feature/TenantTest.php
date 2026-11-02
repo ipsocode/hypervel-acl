@@ -283,9 +283,12 @@ class TenantTest extends TestCase
 
         $this->actingAs($admin);
 
+        $grammar = DB::connection()->getQueryGrammar();
+        $fragment = 'where (' . $grammar->wrap((new AclTeam)->getTable() . '.id') . ' = ?)';
+
         $lookups = 0;
-        DB::listen(function ($query) use ($admins, &$lookups): void {
-            $lookups += (int) ($query->bindings === [$admins->id, 'acme'] && str_contains($query->sql, 'where ("acl_teams"."id" = ?)'));
+        DB::listen(function ($query) use ($admins, $fragment, &$lookups): void {
+            $lookups += (int) ($query->bindings === [$admins->id, 'acme'] && str_contains($query->sql, $fragment));
         });
 
         $this->putJson("acl/teams/{$ops->id}", ['name' => 'Operations'])->assertOk()->assertJsonPath('data.tenant', 'acme');

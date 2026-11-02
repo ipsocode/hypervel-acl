@@ -13,6 +13,7 @@ use Ipsocode\Acl\Http\Middleware\ResolveAcl;
 use Ipsocode\Acl\Models\AclTeam;
 use Ipsocode\Acl\Models\AclWorkspace;
 use Ipsocode\Acl\Support\Teams;
+use Ipsocode\Acl\Support\Workspaces;
 use Ipsocode\Acl\Tenant;
 use Ipsocode\Acl\Tests\WorkspaceTestCase;
 use Ipsocode\Acl\Workspace;
@@ -472,16 +473,25 @@ class WorkspaceTest extends WorkspaceTestCase
         $ops->syncTeamRoles(['editor']);
         $user = User::factory()->create();
 
-        $this->app->make(Reach::class)->ancestorsOf($this->branchA->id);
+        $grammar = DB::connection()->getQueryGrammar();
+        $walk = 'select ' . $grammar->wrap(Workspaces::parentColumn()) . ' from ' . $grammar->wrapTable((new AclWorkspace)->getTable());
 
         $queries = [];
         DB::listen(function ($query) use (&$queries): void {
             $queries[] = $query->sql;
         });
 
-        $ops->addUser($user, $this->branchA->id);
+        $ops->addUser($user, $this->branchB->id);
 
-        $this->assertSame([], array_filter($queries, fn (string $sql): bool => str_contains($sql, 'select "parent_id" from "acl_workspaces"')));
+        $this->assertNotEmpty(array_filter($queries, fn (string $sql): bool => str_contains($sql, $walk)));
+
+        $queries = [];
+        $this->app->make(Reach::class)->ancestorsOf($this->branchA->id);
+        $queries = [];
+
+        $ops->addUser(User::factory()->create(), $this->branchA->id);
+
+        $this->assertSame([], array_filter($queries, fn (string $sql): bool => str_contains($sql, $walk)));
     }
 
     public function testANewWorkspaceIsCoveredByTheOrgRolesAboveIt(): void
