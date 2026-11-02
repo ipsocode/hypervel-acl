@@ -140,6 +140,16 @@ class Workspaces
     }
 
     /**
+     * Get the key of the given workspace and the keys of every workspace beneath it.
+     *
+     * @return list<int|string>
+     */
+    public static function subtreeKeys(int|string $key): array
+    {
+        return [$key, ...static::descendantKeys([$key])];
+    }
+
+    /**
      * Get the keys of a workspace and of the workspaces above it, nearest first, stopping at a cycle.
      *
      * @return list<int|string>

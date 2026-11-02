@@ -24,11 +24,10 @@ class WorkspaceController extends Controller
 
     public function index(Request $request): Response
     {
-        /** @var Builder<AclWorkspace> $query */
         $query = $this->workspaces();
 
         if ($request->string('under')->isNotEmpty()) {
-            $query->under($request->string('under')->toString());
+            $query->whereKey(Workspaces::subtreeKeys($request->string('under')->toString()));
         }
 
         if ($request->query('kind') !== null) {

@@ -102,6 +102,6 @@ class AclWorkspace extends Model
     #[Scope]
     protected function under(Builder $query, int|string $key): void
     {
-        $query->whereKey([$key, ...Workspaces::descendantKeys([$key])]);
+        $query->whereKey(Workspaces::subtreeKeys($key));
     }
 }

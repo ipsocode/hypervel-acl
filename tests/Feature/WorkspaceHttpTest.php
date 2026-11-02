@@ -8,10 +8,12 @@ use Hypervel\Database\QueryException;
 use Hypervel\Http\Request;
 use Hypervel\Permission\Support\Config;
 use Hypervel\Support\Facades\DB;
+use Hypervel\Testbench\Attributes\WithConfig;
 use Ipsocode\Acl\Access\AccessSync;
 use Ipsocode\Acl\Models\AclTeam;
 use Ipsocode\Acl\Models\AclWorkspace;
 use Ipsocode\Acl\Support\Teams;
+use Ipsocode\Acl\Tests\Fixtures\AppWorkspace;
 use Ipsocode\Acl\Tests\WorkspaceTestCase;
 use Ipsocode\Acl\Workspaces\Reach;
 use Ipsocode\Acl\Workspaces\RequestWorkspaceResolver;
@@ -58,6 +60,13 @@ class WorkspaceHttpTest extends WorkspaceTestCase
         $this->getJson('acl/workspaces?kind=branch')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.name', 'Branch');
 
         $this->withHeader('X-Workspace', (string) $this->north->id)->getJson('acl/workspaces')->assertOk()->assertJsonCount(2, 'data');
+    }
+
+    #[WithConfig('acl.models.workspace', AppWorkspace::class)]
+    public function testWorkspacesAreListedBeneathOneForAnApplicationsOwnModel(): void
+    {
+        $this->getJson('acl/workspaces')->assertOk()->assertJsonCount(4, 'data');
+        $this->getJson('acl/workspaces?under=' . $this->north->id)->assertOk()->assertJsonCount(2, 'data');
     }
 
     public function testAWorkspaceNameIsUniqueBeneathItsParent(): void
