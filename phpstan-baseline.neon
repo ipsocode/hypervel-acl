@@ -180,11 +180,6 @@ parameters:
 			count: 1
 			path: src/Models/Role.php
 
-		-
-			message: '#^Parameter \#1 \$column of method Hypervel\\Database\\Eloquent\\Builder\<Hypervel\\Database\\Eloquent\\Model&Ipsocode\\Acl\\Contracts\\Team\>\:\:where\(\) expects array\|\(Closure\(Hypervel\\Database\\Eloquent\\Builder\<Hypervel\\Database\\Eloquent\\Model&Ipsocode\\Acl\\Contracts\\Team\>\)\: mixed\)\|Hypervel\\Contracts\\Database\\Query\\Expression\|Hypervel\\Database\\Eloquent\\Builder\|Hypervel\\Database\\Eloquent\\Relations\\Relation\<\*, \*, \*\>\|Hypervel\\Database\\Query\\Builder\|string, string\|null given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Support/Teams.php
 
 		-
 			message: '#^Parameter \#1 \$column of method Hypervel\\Database\\Eloquent\\Builder\<Hypervel\\Database\\Eloquent\\Model\>\:\:pluck\(\) expects Hypervel\\Contracts\\Database\\Query\\Expression\|string, string\|null given\.$#'

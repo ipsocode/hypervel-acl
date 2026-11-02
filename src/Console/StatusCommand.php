@@ -7,6 +7,7 @@ namespace Ipsocode\Acl\Console;
 use Closure;
 use Hypervel\Console\Command;
 use Hypervel\Permission\Guard;
+use Hypervel\Permission\Support\Config as PermissionConfig;
 use Hypervel\Support\Facades\Schema;
 use Ipsocode\Acl\Console\Concerns\ChecksPermissionPackage;
 use Ipsocode\Acl\Console\Concerns\FindsTeamMigrations;
@@ -25,73 +26,72 @@ class StatusCommand extends Command
     protected string $description = 'Show the state of the permission package, the enabled ACL features and the migrations';
 
     /**
-     * The features the report can be limited to.
-     */
-    protected const FEATURES = ['tenant', 'workspace'];
-
-    /**
      * Execute the console command.
      *
      * Each setting, migration and problem belongs to a section: the permission package's is always
      * reported, a feature's when the report is not limited or is limited to it, and the rest only
-     * when it is not limited.
+     * when it is not limited. The general problems are reported either way: the key type and the
+     * users table decide the tables every feature's migrations build on.
      */
     public function handle(): int
     {
         /** @var list<string> $only */
         $only = $this->option('only');
 
-        if (($unknown = array_diff($only, self::FEATURES)) !== []) {
-            $this->error('--only takes ' . implode(' or ', self::FEATURES) . ', not ' . implode(', ', $unknown) . '.');
+        $features = array_map(fn (StatusSection $section) => $section->value, StatusSection::features());
+
+        if (($unknown = array_diff($only, $features)) !== []) {
+            $this->error('--only takes ' . implode(' or ', $features) . ', not ' . implode(', ', $unknown) . '.');
 
             return self::FAILURE;
         }
 
-        $shown = fn (array $row): bool => $row[0] === 'package' || $only === [] || in_array($row[0], $only, true);
+        $limited = array_map(StatusSection::from(...), $only);
+        $shown = fn (array $row): bool => $row[0] === StatusSection::Package || $limited === [] || in_array($row[0], $limited, true);
         $problems = [];
         $active = ($problem = $this->permissionPackageProblem()) === null;
 
         if (! $active) {
-            $problems[] = ['package', $problem];
+            $problems[] = [StatusSection::Package, $problem];
         }
 
         if (Config::tenantEnabled() && in_array(Config::tenantForeignKey(), [null, ''], true)) {
-            $problems[] = ['tenant', 'acl.tenant is on but acl.column_names.tenant_foreign_key names no column.'];
+            $problems[] = [StatusSection::Tenant, 'acl.tenant is on but acl.column_names.tenant_foreign_key names no column.'];
         }
 
-        $configured = config('acl.key_type');
+        $configured = Config::keyType();
         $actual = KeyType::fromPermissionsTable();
 
         if ($configured !== null && $actual !== null && $actual->value !== $configured) {
-            $problems[] = ['general', "acl.key_type is {$configured} but the permissions table uses {$actual->value} keys: set it to null or to {$actual->value}."];
+            $problems[] = [StatusSection::General, "acl.key_type is {$configured} but the permissions table uses {$actual->value} keys: set it to null or to {$actual->value}."];
         }
 
         foreach ($this->userTableProblems() as $problem) {
-            $problems[] = ['general', $problem];
+            $problems[] = [StatusSection::General, $problem];
         }
 
         $this->table(['Setting', 'Value'], $this->rows($shown, [
-            ['package', 'Permission package', $active ? 'active' : 'not active'],
-            ['general', 'Teams', $this->state(config('permission.teams') === true)],
-            ['tenant', 'Tenant', $this->state(Config::tenantEnabled())],
-            ['workspace', 'Workspace', $this->state(Workspaces::enabled())],
-            ['general', 'Team model', Teams::model()],
-            ['workspace', 'Workspace model', Workspaces::model() ?? '-'],
-            ['general', 'Key type', KeyType::forMigration()->value],
-            ['general', 'Guards', implode(', ', Config::guards())],
+            [StatusSection::Package, 'Permission package', $active ? 'active' : 'not active'],
+            [StatusSection::General, 'Teams', $this->state(PermissionConfig::teamsEnabled())],
+            [StatusSection::Tenant, 'Tenant', $this->state(Config::tenantEnabled())],
+            [StatusSection::Workspace, 'Workspace', $this->state(Workspaces::enabled())],
+            [StatusSection::General, 'Team model', Teams::model()],
+            [StatusSection::Workspace, 'Workspace model', Workspaces::model() ?? '-'],
+            [StatusSection::General, 'Key type', KeyType::forMigration()->value],
+            [StatusSection::General, 'Guards', implode(', ', Config::guards())],
         ]));
 
         // The tenant column is unknown without a name, so its stub cannot be listed then.
         $stubs = Config::tenantEnabled() && Config::tenantForeignKey() === null
             ? []
-            : $this->teamStubs();
+            : $this->teamStubSections();
 
         $this->table(['Migration', 'State'], $this->rows($shown, [
-            ['general', 'create_permission_tables', $this->published('create_permission_tables')],
-            ...array_map(fn (string $stub) => [$this->stubSection($stub), $stub, $this->published($stub)], $stubs),
+            [StatusSection::General, 'create_permission_tables', $this->published('create_permission_tables')],
+            ...array_map(fn (string $stub, StatusSection $section) => [$section, $stub, $this->published($stub)], array_keys($stubs), $stubs),
         ]));
 
-        $problems = array_values(array_filter($problems, $shown));
+        $problems = array_values(array_filter($problems, fn (array $problem): bool => $problem[0] === StatusSection::General || $shown($problem)));
 
         foreach ($problems as [, $problem]) {
             $this->error($problem);
@@ -103,25 +103,13 @@ class StatusCommand extends Command
     /**
      * Keep the rows of the shown sections, without their section.
      *
-     * @param Closure(array<int, string>): bool $shown
-     * @param list<array<int, string>> $rows
+     * @param Closure(array{StatusSection, string}): bool $shown
+     * @param list<array{StatusSection, string, string}|array{StatusSection, string}> $rows
      * @return list<array<int, string>>
      */
     protected function rows(Closure $shown, array $rows): array
     {
         return array_values(array_map(fn (array $row) => array_slice($row, 1), array_filter($rows, $shown)));
-    }
-
-    /**
-     * Get the section a stub's migration belongs to.
-     */
-    protected function stubSection(string $stub): string
-    {
-        return match (true) {
-            str_contains($stub, 'tenant') => 'tenant',
-            str_contains($stub, 'workspace') => 'workspace',
-            default => 'general',
-        };
     }
 
     /**

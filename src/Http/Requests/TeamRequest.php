@@ -29,7 +29,7 @@ class TeamRequest extends FormRequest
 
         $rules = [
             'name' => ['required', 'string', function (string $attribute, mixed $value, Closure $fail) use ($column, $tenant, $current): void {
-                $taken = Teams::query()->withoutGlobalScope('acl_tenant')
+                $taken = Teams::query()->withoutGlobalScope(Teams::TENANT_SCOPE)
                     ->where('name', $value)
                     ->when($column !== null, fn ($query) => $query->where($column, Teams::query()->find($tenant)?->tenant()))
                     ->when($current !== null, fn ($query) => $query->whereKeyNot($current))

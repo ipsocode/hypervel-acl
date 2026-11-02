@@ -46,14 +46,14 @@ class WorkspaceRequest extends FormRequest
         $parent = Workspaces::parentColumn();
         $column = Teams::tenantColumn();
 
-        $moved = $current === null ? null : Workspaces::query()->withoutGlobalScope('acl_tenant')->find($current);
+        $moved = $current === null ? null : Workspaces::query()->withoutGlobalScope(Teams::TENANT_SCOPE)->find($current);
         $beneath = $this->has($parent) ? $this->input($parent) : $moved?->getAttribute($parent);
 
         if ($beneath === null || $beneath === '') {
             return;
         }
 
-        $taken = Workspaces::query()->withoutGlobalScope('acl_tenant')
+        $taken = Workspaces::query()->withoutGlobalScope(Teams::TENANT_SCOPE)
             ->where('name', $name)
             ->where($parent, $beneath)
             ->when($column !== null, fn ($query) => $query->where($column, $moved === null ? Tenant::id() : $moved->getAttribute($column)))

@@ -129,12 +129,38 @@ class AccessSync
      */
     public function markChanged(Team $team): void
     {
-        $keys = [$team->getKey(), ...$this->dependents($team)];
+        $this->markChangedMany([$team]);
+    }
+
+    /**
+     * Mark several teams, and every team that inherits any of them, as changed, touching, deleting
+     * and flushing once over all of them.
+     *
+     * @param iterable<Model&Team> $teams
+     */
+    public function markChangedMany(iterable $teams): void
+    {
+        $keys = [];
+        $morphClass = null;
+
+        foreach ($teams as $team) {
+            $morphClass = $team->getMorphClass();
+
+            foreach ([$team->getKey(), ...$this->dependents($team)] as $key) {
+                $keys[(string) $key] = $key;
+            }
+        }
+
+        if ($morphClass === null) {
+            return;
+        }
+
+        $keys = array_values($keys);
 
         // The teams' own rows, which hold each team's roles, stay.
         $rows = DB::table(Config::modelHasRolesTable())
             ->whereIn(Config::teamForeignKey(), $keys)
-            ->where('model_type', '!=', $team->getMorphClass());
+            ->where('model_type', '!=', $morphClass);
 
         $partitions = $this->partitions(clone $rows);
 
@@ -165,7 +191,7 @@ class AccessSync
         DB::table(Teams::ORGANIZATIONS_TABLE)->whereIn(Teams::teamPivotKey(), $keys)->update(['updated_at' => Date::now()->format(Teams::DATE_FORMAT)]);
 
         // The model's own date format keeps the milliseconds a bulk touch() would round away.
-        Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($keys)->toBase()
+        Teams::query()->withoutGlobalScope(Teams::TENANT_SCOPE)->whereKey($keys)->toBase()
             ->update([(string) $model->getUpdatedAtColumn() => $model->freshTimestampString()]);
     }
 
@@ -195,7 +221,7 @@ class AccessSync
 
         $tenants = $column === null
             ? [null]
-            : Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($keys)->distinct()->pluck($column)->all();
+            : Teams::query()->withoutGlobalScope(Teams::TENANT_SCOPE)->whereKey($keys)->distinct()->pluck($column)->all();
 
         foreach ($tenants as $tenant) {
             foreach ($partitions as $partition) {
@@ -239,7 +265,7 @@ class AccessSync
 
             // Unscoped, so the cached list is the same whichever tenant builds it.
             while ($queue !== []) {
-                foreach (Teams::query()->withoutGlobalScope('acl_tenant')->where($column, array_pop($queue))->pluck($team->getKeyName()) as $key) {
+                foreach (Teams::query()->withoutGlobalScope(Teams::TENANT_SCOPE)->where($column, array_pop($queue))->pluck($team->getKeyName()) as $key) {
                     if (! isset($seen[(string) $key])) {
                         $seen[(string) $key] = true;
                         $queue[] = $key;
@@ -262,7 +288,7 @@ class AccessSync
      */
     public function forgetDependentsAbove(int|string|null $key): void
     {
-        $team = $key === null ? null : Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($key)->first();
+        $team = $key === null ? null : Teams::query()->withoutGlobalScope(Teams::TENANT_SCOPE)->whereKey($key)->first();
 
         if ($team === null) {
             return;
@@ -283,7 +309,7 @@ class AccessSync
      */
     public function rolesFor(Team $team): array
     {
-        $pivot = config('permission.column_names.role_pivot_key') ?? PermissionRegistrar::DEFAULT_ROLE_PIVOT_KEY;
+        $pivot = $this->registrar->pivotRole;
 
         // Each team's own roles are held by the team model itself, under its own id.
         $held = DB::table(Config::modelHasRolesTable())
@@ -316,7 +342,7 @@ class AccessSync
             $seen = [(string) $team->getKey() => true];
 
             // Unscoped, so the cached chain is the same whichever tenant builds it.
-            for ($parent = $team->getAttribute($column); $parent !== null && ! isset($seen[(string) $parent]); $parent = Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($parent)->value($column)) {
+            for ($parent = $team->getAttribute($column); $parent !== null && ! isset($seen[(string) $parent]); $parent = Teams::query()->withoutGlobalScope(Teams::TENANT_SCOPE)->whereKey($parent)->value($column)) {
                 $seen[(string) $parent] = true;
                 $chain[] = $parent;
             }

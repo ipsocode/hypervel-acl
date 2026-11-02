@@ -22,7 +22,7 @@ trait BelongsToTenant
      */
     public static function bootBelongsToTenant(): void
     {
-        static::addGlobalScope('acl_tenant', static function (Builder $builder): void {
+        static::addGlobalScope(Teams::TENANT_SCOPE, static function (Builder $builder): void {
             $column = Teams::tenantColumn();
             $tenant = Tenant::id();
 

@@ -20,9 +20,10 @@ class Teams
      */
     public const GLOBALS = 'Globals';
 
-    public const DEFAULT_TEAM_PIVOT_KEY = 'team_id';
-
-    public const DEFAULT_USER_PIVOT_KEY = 'user_id';
+    /**
+     * The name of the tenant scope, which `BelongsToTenant` registers and the unscoped queries remove.
+     */
+    public const TENANT_SCOPE = 'acl_tenant';
 
     /**
      * The precision membership timestamps are written at: a team's change and a member's sync
@@ -52,11 +53,11 @@ class Teams
     }
 
     /**
-     * Get the org role table's team column: acl.column_names.team_pivot_key, else team_id.
+     * Get the org role table's team column: permission.column_names.team_foreign_key.
      */
     public static function teamPivotKey(): string
     {
-        return config('acl.column_names.team_pivot_key') ?? self::DEFAULT_TEAM_PIVOT_KEY;
+        return Config::teamPivotKey();
     }
 
     /**
@@ -64,7 +65,7 @@ class Teams
      */
     public static function userPivotKey(): string
     {
-        return config('acl.column_names.user_pivot_key') ?? self::DEFAULT_USER_PIVOT_KEY;
+        return Config::userPivotKey();
     }
 
     /**
@@ -96,13 +97,11 @@ class Teams
         $column = static::tenantColumn();
         $tenant ??= Tenant::id();
 
-        return static::query()->withoutGlobalScope('acl_tenant')
-            ->when($column !== null, fn ($query) => $query->where($column, $tenant))
-            ->where('name', self::GLOBALS)
-            ->first() ?? static::model()::create([
-                'name' => self::GLOBALS,
-                ...($column === null ? [] : [$column => $tenant]),
-            ]);
+        $query = static::query()->withoutGlobalScope(self::TENANT_SCOPE);
+        $attributes = ['name' => self::GLOBALS, ...($column === null ? [] : [$column => $tenant])];
+
+        // Concurrent first calls can both miss, so a lost insert reads back the row that won.
+        return (clone $query)->where($attributes)->first() ?? $query->createOrFirst($attributes);
     }
 
     /**

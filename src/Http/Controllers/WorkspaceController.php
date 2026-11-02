@@ -27,9 +27,7 @@ class WorkspaceController extends Controller
         $query = $this->workspaces();
 
         if ($request->string('under')->isNotEmpty()) {
-            $under = $request->string('under')->toString();
-
-            $query->whereKey([$under, ...Workspaces::descendantKeys([$under])]);
+            $query->whereKey(Workspaces::subtreeKeys($request->string('under')->toString()));
         }
 
         if ($request->query('kind') !== null) {
