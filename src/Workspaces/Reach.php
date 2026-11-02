@@ -164,7 +164,7 @@ class Reach
             return $entry;
         }
 
-        $model = Workspaces::query()->withoutGlobalScope('acl_tenant')->whereKey($workspace)->first();
+        $model = Workspaces::query()->withoutGlobalScope(Teams::TENANT_SCOPE)->whereKey($workspace)->first();
 
         if ($model === null) {
             return null;
@@ -214,8 +214,6 @@ class Reach
     {
         $teams = DB::table(Teams::ORGANIZATIONS_TABLE)->whereIn(Workspaces::column(), $workspaces)->distinct()->pluck(Teams::teamPivotKey())->all();
 
-        foreach (Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($teams)->get() as $team) {
-            $this->sync->markChanged($team);
-        }
+        $this->sync->markChangedMany(Teams::query()->withoutGlobalScope(Teams::TENANT_SCOPE)->whereKey($teams)->get());
     }
 }

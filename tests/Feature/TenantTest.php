@@ -6,6 +6,7 @@ namespace Ipsocode\Acl\Tests\Feature;
 
 use Hypervel\Contracts\Foundation\Application;
 use Hypervel\Permission\PermissionRegistrar;
+use Hypervel\Support\Facades\DB;
 use Hypervel\Support\Facades\Schema;
 use Ipsocode\Acl\Exceptions\UserAlreadyInTeam;
 use Ipsocode\Acl\Http\Controllers\TeamController;
@@ -271,6 +272,26 @@ class TenantTest extends TestCase
         $this->getJson('acl/teams')->assertOk()->assertJsonCount(2, 'data');
         $this->getJson("acl/teams/{$foreign->id}")->assertNotFound();
         $this->postJson('acl/teams', ['name' => 'Bad', 'inherit_id' => $foreign->id])->assertUnprocessable();
+    }
+
+    public function testUpdatingATeamLooksUpTheCurrentTeamOnce(): void
+    {
+        (new AclSeeder)->run();
+
+        [$admins, $admin] = $this->member('acme', ['manager']);
+        $ops = AclTeam::create(['name' => 'Ops', 'tenant' => 'acme']);
+
+        $this->actingAs($admin);
+
+        $lookups = 0;
+        DB::listen(function ($query) use ($admins, &$lookups): void {
+            $lookups += (int) ($query->bindings === [$admins->id, 'acme'] && str_contains($query->sql, 'where ("acl_teams"."id" = ?)'));
+        });
+
+        $this->putJson("acl/teams/{$ops->id}", ['name' => 'Operations'])->assertOk()->assertJsonPath('data.tenant', 'acme');
+
+        // The form request reads it once to validate; the controller must add one, not two.
+        $this->assertSame(2, $lookups);
     }
 
     public function testTheSameCatalogCanBeSeededForEveryTenant(): void

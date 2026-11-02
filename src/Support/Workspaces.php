@@ -122,7 +122,7 @@ class Workspaces
         $found = [];
 
         while ($queue !== []) {
-            $query = static::query()->withoutGlobalScope('acl_tenant');
+            $query = static::query()->withoutGlobalScope(Teams::TENANT_SCOPE);
             $next = [];
 
             foreach ($query->whereIn($parent, $queue)->pluck($query->getModel()->getKeyName()) as $key) {
@@ -177,6 +177,6 @@ class Workspaces
 
     protected static function parentOf(int|string $key, string $parent): int|string|null
     {
-        return static::query()->withoutGlobalScope('acl_tenant')->whereKey($key)->value($parent);
+        return static::query()->withoutGlobalScope(Teams::TENANT_SCOPE)->whereKey($key)->value($parent);
     }
 }

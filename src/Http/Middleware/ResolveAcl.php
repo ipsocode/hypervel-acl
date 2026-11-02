@@ -88,7 +88,7 @@ class ResolveAcl
 
             if ($this->sync->isStale($last, $membership->changed)) {
                 /** @var Model&Team $team */
-                $team = Teams::query()->withoutGlobalScope('acl_tenant')->whereKey($membership->team)->firstOrFail();
+                $team = Teams::query()->withoutGlobalScope(Teams::TENANT_SCOPE)->whereKey($membership->team)->firstOrFail();
                 $times[$key] = $this->sync->refresh($user, $team);
 
                 if ($session === null) {

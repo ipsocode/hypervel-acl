@@ -52,7 +52,9 @@ interface Team
     public function addUser(Model $user, int|string $workspace = Workspace::HOME): void;
 
     /**
-     * Remove a user from the team, taking the team's roles away, in one workspace or all.
+     * Remove a user from the team, taking the team's roles away, in one workspace, a list of them or all.
+     *
+     * @param null|int|list<int|string>|string $workspace
      */
-    public function removeUser(Model $user, int|string|null $workspace = null): void;
+    public function removeUser(Model $user, int|string|array|null $workspace = null): void;
 }

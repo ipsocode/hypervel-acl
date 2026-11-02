@@ -13,12 +13,7 @@ use SplFileInfo;
 trait FindsTeamMigrations
 {
     /**
-     * Get the stubs to copy: the inheritance column for the application's own team table, and,
-     * with acl.tenant on, the tenant column for the permission, team and org role tables and the unique keys it leads, and, with
-     * acl.workspace on, the partition column for the permission tables and, for the application's
-     * own workspace model, its parent column.
-     *
-     * The package's team and workspace tables are migrations the package loads itself.
+     * Get the stubs to copy.
      *
      * @return list<string>
      */
@@ -28,7 +23,13 @@ trait FindsTeamMigrations
     }
 
     /**
-     * Get the stubs to copy, each with the section of acl:status it belongs to.
+     * Get the stubs to copy with the section of the status report each belongs to: the inheritance
+     * column for the application's own team table, and, with acl.tenant on, the tenant column for
+     * the permission, team and org role tables and the unique keys it leads, and, with acl.workspace
+     * on, the partition column for the permission tables and, for the application's own workspace
+     * model, its parent column.
+     *
+     * The package's team and workspace tables are migrations the package loads itself.
      *
      * @return array<string, StatusSection>
      */

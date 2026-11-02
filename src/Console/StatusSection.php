@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Ipsocode\Acl\Console;
 
-/**
- * The part of the ACL setup a row or problem of acl:status belongs to.
- */
 enum StatusSection: string
 {
     case Package = 'package';
@@ -15,7 +12,7 @@ enum StatusSection: string
     case Workspace = 'workspace';
 
     /**
-     * Get the sections acl:status can be limited to.
+     * Get the sections a report can be limited to.
      *
      * @return list<self>
      */

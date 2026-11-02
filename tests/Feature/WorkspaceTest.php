@@ -428,6 +428,62 @@ class WorkspaceTest extends WorkspaceTestCase
         $this->assertSame(1, $this->rows($user, $this->branchB));
     }
 
+    public function testMovingAWorkspaceDoesNotRunMoreWritesForMoreTeams(): void
+    {
+        $writesFor = function (int $teams): int {
+            foreach (range(1, $teams) as $number) {
+                $team = AclTeam::create(['name' => "Team {$teams}.{$number}"]);
+                $team->syncTeamRoles(['editor']);
+                $team->addUser(User::factory()->create(), $this->branchB->id);
+            }
+
+            $writes = 0;
+            DB::listen(function ($query) use (&$writes): void {
+                $writes += preg_match('/^(insert|delete|update|savepoint|begin)/i', $query->sql);
+            });
+
+            $this->branchB->update(['parent_id' => $this->south->id]);
+            $this->branchB->update(['parent_id' => $this->north->id]);
+
+            return $writes;
+        };
+
+        $few = $writesFor(1);
+        $many = $writesFor(4);
+
+        $this->assertSame($few, $many);
+    }
+
+    public function testMovingAWorkspaceNoOrgRoleReachesMarksNothing(): void
+    {
+        $writes = 0;
+        DB::listen(function ($query) use (&$writes): void {
+            $writes += preg_match('/^delete from .model_has_roles/i', $query->sql);
+        });
+
+        $this->branchB->update(['parent_id' => $this->south->id]);
+
+        $this->assertSame(0, $writes);
+    }
+
+    public function testAddingAUserInACachedWorkspaceRunsNoAncestorQuery(): void
+    {
+        $ops = AclTeam::create(['name' => 'Ops']);
+        $ops->syncTeamRoles(['editor']);
+        $user = User::factory()->create();
+
+        $this->app->make(Reach::class)->ancestorsOf($this->branchA->id);
+
+        $queries = [];
+        DB::listen(function ($query) use (&$queries): void {
+            $queries[] = $query->sql;
+        });
+
+        $ops->addUser($user, $this->branchA->id);
+
+        $this->assertSame([], array_filter($queries, fn (string $sql): bool => str_contains($sql, 'select "parent_id" from "acl_workspaces"')));
+    }
+
     public function testANewWorkspaceIsCoveredByTheOrgRolesAboveIt(): void
     {
         $reach = $this->app->make(Reach::class);
@@ -464,6 +520,28 @@ class WorkspaceTest extends WorkspaceTestCase
 
         $own = AclTeam::create(['name' => 'Own', 'inherit_id' => $ops->id]);
         $this->assertSame($ops->id, $own->inherit_id);
+    }
+
+    public function testAGlobalsTeamCreatedByAConcurrentRequestIsReadBack(): void
+    {
+        $column = Teams::tenantColumn();
+        $missed = false;
+
+        // The other request's insert has landed, but this request's lookup missed it.
+        DB::table((new AclTeam)->getTable())->insert(['name' => Teams::GLOBALS, ...($column === null ? [] : [$column => Tenant::id()])]);
+
+        AclTeam::addGlobalScope('missed', function ($query) use (&$missed): void {
+            if (! $missed) {
+                $missed = true;
+                $query->whereRaw('1 = 0');
+            }
+        });
+
+        $globals = Teams::globals();
+
+        $this->assertTrue($missed);
+        $this->assertSame(1, AclTeam::query()->withoutGlobalScope('missed')->where('name', Teams::GLOBALS)->count());
+        $this->assertTrue($globals->is(Teams::globals()));
     }
 
     public function testGlobalsRolesReachEveryMembersWorkspace(): void

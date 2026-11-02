@@ -24,7 +24,7 @@ enum KeyType: string
      */
     public static function resolve(): self
     {
-        $configured = config('acl.key_type');
+        $configured = Config::keyType();
 
         return $configured !== null ? self::from($configured) : self::fromModels();
     }
@@ -34,7 +34,7 @@ enum KeyType: string
      */
     public static function forMigration(): self
     {
-        $configured = config('acl.key_type');
+        $configured = Config::keyType();
 
         if ($configured !== null) {
             return self::from($configured);
@@ -48,7 +48,7 @@ enum KeyType: string
      */
     public static function fromModels(): self
     {
-        $role = self::fromModel(config('permission.models.role'));
+        $role = self::fromModel(Config::roleModel());
 
         if ($role !== self::Id) {
             return $role;
@@ -64,7 +64,7 @@ enum KeyType: string
      */
     public static function fromPermissionsTable(): ?self
     {
-        return self::fromTable(config('permission.table_names.permissions'), 'id');
+        return self::fromTable(Config::permissionsTable(), 'id');
     }
 
     /**

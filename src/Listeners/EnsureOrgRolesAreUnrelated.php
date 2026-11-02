@@ -10,9 +10,14 @@ use Ipsocode\Acl\Exceptions\UserAlreadyInTeam;
 use Ipsocode\Acl\Support\Teams;
 use Ipsocode\Acl\Support\Workspaces;
 use Ipsocode\Acl\Workspace;
+use Ipsocode\Acl\Workspaces\Reach;
 
 class EnsureOrgRolesAreUnrelated
 {
+    public function __construct(protected Reach $reach)
+    {
+    }
+
     /**
      * Refuse an org role whose workspace is the same as, above or beneath a workspace the user
      * already holds one in, whatever the team. The home workspace is above every other.
@@ -36,7 +41,7 @@ class EnsureOrgRolesAreUnrelated
 
         $related = [
             (string) Workspace::HOME,
-            ...array_map('strval', Workspaces::ancestorKeys($event->workspace)),
+            ...array_map('strval', $this->reach->ancestorsOf($event->workspace)),
             ...array_map('strval', Workspaces::descendantKeys([$event->workspace])),
         ];
 

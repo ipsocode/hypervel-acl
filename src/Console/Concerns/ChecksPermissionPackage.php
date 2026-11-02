@@ -16,8 +16,8 @@ trait ChecksPermissionPackage
      *
      * An interactive run offers to take the missing step: publish the permission config, turn on
      * its teams, or run acl:setup for the permission migrations. The application's config is read
-     * at boot, so the command is run again afterwards. A run under --no-interaction or --pretend
-     * is never asked.
+     * at boot, so the command is run again once a step has changed it. A run under --no-interaction
+     * or --pretend is never asked.
      */
     protected function ensurePermissionPackage(bool $migrated = true): bool
     {
@@ -76,7 +76,7 @@ trait ChecksPermissionPackage
         $config = $this->hypervel->get('config');
 
         if (! is_string($config->get('permission.table_names.roles')) || ! $config->boolean('permission.teams')) {
-            $changed = false;
+            $published = false;
 
             if (! File::exists(config_path('permission.php'))) {
                 if (! $this->confirm('Publish the permission config now?', true)) {
@@ -84,8 +84,11 @@ trait ChecksPermissionPackage
                 }
 
                 $this->call('vendor:publish', ['--tag' => 'permission-config']);
-                $changed = true;
+
+                $published = true;
             }
+
+            $changed = $published;
 
             if (! $config->boolean('permission.teams') && $this->confirm('Turn on teams in config/permission.php?', true)) {
                 $changed = $this->turnOnPermissionTeams() || $changed;
@@ -104,19 +107,17 @@ trait ChecksPermissionPackage
             return;
         }
 
-        if ($this->confirm('Run acl:setup now to publish the permission migrations?', true)) {
-            $this->runPermissionSetup();
+        if ($this->confirm('Run acl:setup now to publish the permission migrations?', true) && $this->publishPermissionMigration()) {
+            $this->info('Run php artisan migrate, then run this command again.');
         }
     }
 
     /**
-     * Run acl:setup, and say what is next when it published the permission migration.
+     * Run acl:setup and determine if it published the permission tables' migration.
      */
-    protected function runPermissionSetup(): void
+    protected function publishPermissionMigration(): bool
     {
-        if ($this->call('acl:setup') === self::SUCCESS && $this->permissionMigrationPublished()) {
-            $this->info('Run php artisan migrate, then run this command again.');
-        }
+        return $this->call('acl:setup') === self::SUCCESS && $this->permissionMigrationPublished();
     }
 
     /**
@@ -129,8 +130,9 @@ trait ChecksPermissionPackage
     }
 
     /**
-     * Set teams to true in the application's permission config, or tell the user to when it is not
-     * false there exactly once. Return whether the file was changed.
+     * Set teams to true in the application's permission config, or tell the user to when it is not false there exactly once.
+     *
+     * Return whether the file was changed.
      */
     protected function turnOnPermissionTeams(): bool
     {
