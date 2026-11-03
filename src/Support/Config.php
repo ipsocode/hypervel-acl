@@ -22,7 +22,7 @@ class Config
     }
 
     /**
-     * Determine if tenant are enabled.
+     * Determine if tenancy is enabled.
      */
     public static function tenantEnabled(): bool
     {
@@ -30,7 +30,7 @@ class Config
     }
 
     /**
-     * Ensure tenant are enabled.
+     * Ensure tenancy is enabled.
      */
     public static function ensureTenantEnabled(): void
     {
@@ -40,7 +40,7 @@ class Config
     }
 
     /**
-     * Determine if workspace are enabled.
+     * Determine if workspaces are enabled.
      */
     public static function workspaceEnabled(): bool
     {
@@ -48,7 +48,7 @@ class Config
     }
 
     /**
-     * Ensure workspace are enabled.
+     * Ensure workspaces are enabled.
      */
     public static function ensureWorkspaceEnabled(): void
     {
