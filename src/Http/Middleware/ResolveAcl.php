@@ -71,9 +71,7 @@ class ResolveAcl
 
             $memberships = DB::table(Teams::ORGANIZATIONS_TABLE)
                 ->where(Teams::userPivotKey(), $user->getKey())
-                ->when($tenant !== null && Tenant::check(), fn ($query) => $query->where(
-                    fn ($query) => $query->whereNull($tenant)->orWhere($tenant, Tenant::id())
-                ))
+                ->when($tenant, fn ($query, string $tenant) => $query->where($tenant, Tenant::id()))
                 ->get([Teams::teamPivotKey() . ' as team', 'updated_at as changed', ...(Workspaces::enabled() ? [Workspaces::column() . ' as workspace'] : [])]);
 
             if (Workspaces::enabled()) {

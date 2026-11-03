@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Hypervel\Database\Migrations\Migration;
 use Hypervel\Database\Schema\Blueprint;
+use Hypervel\Support\Facades\DB;
 use Hypervel\Support\Facades\Schema;
 use Ipsocode\Acl\Support\Teams;
 
@@ -12,9 +13,12 @@ return new class extends Migration {
      * Run the migrations.
      *
      * With acl.tenant on, adds acl.column_names.tenant_foreign_key to the five permission tables,
-     * the team table and the org role table, wherever it is missing. The column is nullable, as
-     * existing rows have no tenant yet. The lead_tenant_unique_keys migration then puts it first
-     * in their unique keys.
+     * the team table and the org role table, wherever it is missing. No row is shared between
+     * tenants, so the column is required on the tables whose rows the package stamps, and a row
+     * already there, which would have no tenant, fails the migration. The lead_tenant_unique_keys
+     * migration then puts it first in their unique keys.
+     *
+     * @throws RuntimeException when a table that needs a tenant already has rows
      */
     public function up(): void
     {
@@ -24,9 +28,11 @@ return new class extends Migration {
             return;
         }
 
+        $required = $this->stamped();
+
         foreach ($this->tables() as $name) {
             if (! Schema::hasColumn($name, $tenant)) {
-                Schema::table($name, static fn (Blueprint $table) => $table->string($tenant)->nullable());
+                $this->addColumn($name, $tenant, in_array($name, $required, true));
             }
         }
     }
@@ -38,6 +44,36 @@ return new class extends Migration {
      */
     public function down(): void
     {
+    }
+
+    /**
+     * Add the tenant column, required when the package stamps the table's rows.
+     *
+     * SQLite cannot add a required column without a default, so it is added nullable and then
+     * made required, which an empty table allows on every driver.
+     */
+    protected function addColumn(string $name, string $tenant, bool $required): void
+    {
+        throw_if($required && DB::table($name)->exists(), RuntimeException::class, "Table [{$name}] already has rows, which would have no tenant. Enable acl.tenant before seeding, or add the [{$tenant}] column yourself and give every row its tenant.");
+
+        Schema::table($name, static fn (Blueprint $table) => $table->string($tenant)->nullable());
+
+        if ($required) {
+            Schema::table($name, static fn (Blueprint $table) => $table->string($tenant)->nullable(false)->change());
+        }
+    }
+
+    /**
+     * Get the tables whose rows the package stamps with their tenant: roles, permissions, teams and org roles.
+     *
+     * @return list<string>
+     */
+    protected function stamped(): array
+    {
+        $names = config()->array('permission.table_names');
+        $model = Teams::model();
+
+        return [$names['roles'], $names['permissions'], (new $model)->getTable(), Teams::ORGANIZATIONS_TABLE];
     }
 
     /**

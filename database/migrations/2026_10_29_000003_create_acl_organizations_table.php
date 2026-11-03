@@ -43,7 +43,7 @@ return new class extends Migration {
             }
 
             if ($tenant !== null) {
-                $table->string($tenant)->nullable();
+                $table->string($tenant);
             }
 
             $table->timestamps(3);

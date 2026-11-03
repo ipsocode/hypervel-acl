@@ -69,13 +69,12 @@ class TenantConsoleTest extends TestCase
         $acme = AclTeam::create(['name' => 'acme team', 'tenant' => 'acme']);
         Role::create(['name' => 'acme-only', 'tenant' => 'acme']);
         Role::create(['name' => 'globex-only', 'tenant' => 'globex']);
-        Role::create(['name' => 'shared']);
 
         $report = $this->probe(['--team' => (string) $acme->id]);
 
         $this->assertSame('acme', $report['tenant']);
         $this->assertSame('acme', $report['stamped']);
-        $this->assertSame(['acme-only', 'shared', 'probe'], $report['roles']);
+        $this->assertSame(['acme-only', 'probe'], $report['roles']);
     }
 
     public function testTenantSelectsTheTenantToSeed(): void
@@ -94,13 +93,6 @@ class TenantConsoleTest extends TestCase
         $acme = AclTeam::create(['name' => 'acme team', 'tenant' => 'acme']);
 
         $this->assertSame('acme', $this->probe(['--team' => (string) $acme->id, '--tenant' => 'acme'])['tenant']);
-    }
-
-    public function testATeamWithoutATenantTakesTheGivenTenant(): void
-    {
-        $shared = AclTeam::create(['name' => 'shared team']);
-
-        $this->assertSame('globex', $this->probe(['--team' => (string) $shared->id, '--tenant' => 'globex'])['tenant']);
     }
 
     public function testATenantThatDisagreesWithTheTeamFails(): void

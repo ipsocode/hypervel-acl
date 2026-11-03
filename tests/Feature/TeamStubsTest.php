@@ -11,6 +11,7 @@ use Hypervel\Support\Facades\Schema;
 use Ipsocode\Acl\Models\AclTeam;
 use Ipsocode\Acl\Support\Teams;
 use Ipsocode\Acl\Tests\Fixtures\AppTeam;
+use Ipsocode\Acl\Tests\Fixtures\AppWorkspace;
 use Ipsocode\Acl\Tests\TestCase;
 use RuntimeException;
 use Workbench\App\Models\User;
@@ -27,6 +28,31 @@ class TeamStubsTest extends TestCase
     protected function stub(string $name): object
     {
         return require __DIR__ . "/../../database/migrations/{$name}.php.stub";
+    }
+
+    /**
+     * Determine whether the database reports a column as nullable.
+     */
+    protected function nullable(string $table, string $column): bool
+    {
+        foreach (Schema::getColumns($table) as $definition) {
+            if ($definition['name'] === $column) {
+                return $definition['nullable'];
+            }
+        }
+
+        $this->fail("No column {$column} on {$table}.");
+    }
+
+    /**
+     * Use an application's workspace table with tenants on, without its tenant column.
+     */
+    protected function appWorkspaces(): void
+    {
+        config(['acl.models.workspace' => AppWorkspace::class, 'acl.tenant' => true, 'acl.column_names.tenant_foreign_key' => 'tenant']);
+
+        Schema::dropIfExists('acl_workspaces');
+        Schema::create('acl_workspaces', fn (Blueprint $table) => $table->id() && $table->string('name'));
     }
 
     public function testTheConfigNamesTheTeamModel(): void
@@ -79,6 +105,53 @@ class TeamStubsTest extends TestCase
         foreach (['roles', 'permissions', 'model_has_roles', 'model_has_permissions', 'role_has_permissions', 'app_teams', Teams::ORGANIZATIONS_TABLE] as $table) {
             $this->assertTrue(Schema::hasColumn($table, 'tenant'), $table);
         }
+    }
+
+    public function testTheTenantStubRequiresATenantWhereThePackageStampsOne(): void
+    {
+        $this->appTeams();
+
+        $this->stub('add_tenant_column')->up();
+
+        foreach (['roles', 'permissions', 'app_teams', Teams::ORGANIZATIONS_TABLE] as $table) {
+            $this->assertFalse($this->nullable($table, 'tenant'), $table);
+        }
+
+        foreach (['model_has_roles', 'model_has_permissions', 'role_has_permissions'] as $table) {
+            $this->assertTrue($this->nullable($table, 'tenant'), $table);
+        }
+    }
+
+    public function testTheTenantStubRefusesATableWhoseRowsWouldHaveNoTenant(): void
+    {
+        $this->appTeams();
+        DB::table('app_teams')->insert(['name' => 'Ops']);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Table [app_teams] already has rows, which would have no tenant.');
+
+        $this->stub('add_tenant_column')->up();
+    }
+
+    public function testTheWorkspaceParentStubRequiresATenant(): void
+    {
+        $this->appWorkspaces();
+
+        $this->stub('add_workspace_parent')->up();
+
+        $this->assertTrue($this->nullable('acl_workspaces', 'parent_id'));
+        $this->assertFalse($this->nullable('acl_workspaces', 'tenant'));
+    }
+
+    public function testTheWorkspaceParentStubRefusesWorkspacesThatWouldHaveNoTenant(): void
+    {
+        $this->appWorkspaces();
+        DB::table('acl_workspaces')->insert(['name' => 'Branch']);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Table [acl_workspaces] already has rows, which would have no tenant.');
+
+        $this->stub('add_workspace_parent')->up();
     }
 
     public function testEnablingTenantsOnAnExistingInstallLetsMembersBeAddedAndResolved(): void

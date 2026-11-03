@@ -27,7 +27,7 @@ A request without a session, such as an API request authenticated by token, keep
 
 ## Tenants
 
-Set `acl.tenant` to `true` to keep each tenant's roles, permissions and teams apart. The setup command then adds a tenant column, named by `acl.column_names.tenant_foreign_key`, to the five permission tables, the team table and the org role table, and puts the tenant first in the unique keys of role and permission names and of a user's org role, so two tenants may each have a role of the same name. If you enabled tenants on an earlier version, run `php artisan acl:setup` and `php artisan migrate` again: the `lead_tenant_unique_keys` migration it adds gives the keys to an install that already ran the tenant migration. Point `permission.models.role` and `permission.models.permission` at the package's `Ipsocode\Acl\Models\Role` and `Ipsocode\Acl\Models\Permission`, or add the `BelongsToTenant` trait to your own models.
+Set `acl.tenant` to `true` to keep each tenant's roles, permissions and teams apart. The setup command then adds a tenant column, named by `acl.column_names.tenant_foreign_key`, to the five permission tables, the team table and the org role table, and puts the tenant first in the unique keys of role and permission names and of a user's org role, so two tenants may each have a role of the same name. The tenant column is required wherever the package stamps it, so enable `acl.tenant` before anything is seeded: the migration that adds the column to an existing table fails while the table has rows, which would have no tenant. If you enabled tenants on an earlier version, run `php artisan acl:setup` and `php artisan migrate` again: the `lead_tenant_unique_keys` migration it adds gives the keys to an install that already ran the tenant migration. Point `permission.models.role` and `permission.models.permission` at the package's `Ipsocode\Acl\Models\Role` and `Ipsocode\Acl\Models\Permission`, or add the `BelongsToTenant` trait to your own models.
 
 The current tenant lives in `Ipsocode\Acl\Tenant`, for the current request or job only:
 
@@ -37,7 +37,7 @@ Tenant::run('acme', function () {
 });
 ```
 
-Models with `BelongsToTenant` see the current tenant's rows and the shared ones that have no tenant, and new models are stamped with the current tenant. So roles seeded without a tenant are shared by every tenant. The package also keys the permission cache by tenant, so each tenant checks against its own roles and permissions.
+Models with `BelongsToTenant` see the current tenant's rows only, and new models are stamped with the current tenant. No row is shared between tenants: creating a role, permission, team or workspace with no tenant, given or current, throws a `LogicException`, and so does seeding outside a tenant, so seed each tenant's catalog in its own tenant. The package also keys the permission cache by tenant, so each tenant checks against its own roles and permissions.
 
 Add the `HasTenant` trait to your user model, and `ResolveAcl` sets the user's tenant on each request. By default it reads the user's tenant column; override `tenantKey()` to take the tenant from somewhere else.
 

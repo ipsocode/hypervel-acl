@@ -95,7 +95,7 @@ class Teams
     public static function globals(int|string|null $tenant = null): Model
     {
         $column = static::tenantColumn();
-        $tenant ??= Tenant::id();
+        $tenant ??= $column === null ? null : Tenant::required();
 
         $query = static::query()->withoutGlobalScope(self::TENANT_SCOPE);
         $attributes = ['name' => self::GLOBALS, ...($column === null ? [] : [$column => $tenant])];

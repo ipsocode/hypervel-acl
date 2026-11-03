@@ -69,7 +69,7 @@ abstract class AclSeeder extends Seeder
         // A raw insert skips the tenant and partition stamping, so the current ones are written here.
         $column = Teams::tenantColumn();
         $tenant = [
-            ...($column === null ? [] : [$column => Tenant::id()]),
+            ...($column === null ? [] : [$column => Tenant::required()]),
             ...(Workspaces::enabled() ? [Workspaces::column() => Workspace::id()] : []),
         ];
 
@@ -117,7 +117,7 @@ abstract class AclSeeder extends Seeder
 
     /**
      * Delete the roles and permissions no definition names, among those the seeder owns: the
-     * current tenant's, or the shared ones without a tenant.
+     * current tenant's.
      *
      * @param list<RoleDefinition> $definitions
      * @param array<string, array{string, string}> $wanted

@@ -52,7 +52,7 @@ class Reach
 
         $entry = $this->entry($workspace);
 
-        return $entry !== null && ($entry['tenant'] === null || Tenant::id() === null || (string) $entry['tenant'] === (string) Tenant::id());
+        return $entry !== null && (Tenant::id() === null || (string) $entry['tenant'] === (string) Tenant::id());
     }
 
     /**
