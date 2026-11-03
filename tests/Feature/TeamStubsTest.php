@@ -95,6 +95,9 @@ class TeamStubsTest extends TestCase
 
         $this->assertSame('acme', DB::table(Teams::ORGANIZATIONS_TABLE)->value('tenant'));
 
+        // The users table of this install has no tenant column, so the request's user carries its tenant in memory.
+        $user->setAttribute('tenant', 'acme');
+
         $this->nextRequest($user);
         $this->assertSame($team->getKey(), $this->app->make(PermissionRegistrar::class)->getPermissionsTeamId());
     }

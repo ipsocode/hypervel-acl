@@ -5,18 +5,23 @@ declare(strict_types=1);
 namespace Ipsocode\Acl\Tests\Feature;
 
 use Hypervel\Contracts\Foundation\Application;
+use Hypervel\Database\Eloquent\Model;
+use Hypervel\Http\Request;
 use Hypervel\Permission\PermissionRegistrar;
 use Hypervel\Support\Facades\DB;
 use Hypervel\Support\Facades\Schema;
 use Ipsocode\Acl\Exceptions\UserAlreadyInTeam;
 use Ipsocode\Acl\Http\Controllers\TeamController;
+use Ipsocode\Acl\Http\Middleware\ResolveAcl;
 use Ipsocode\Acl\Models\AclTeam;
 use Ipsocode\Acl\Models\Permission;
 use Ipsocode\Acl\Models\Role;
 use Ipsocode\Acl\Permission\TenantPermissionRegistrar;
 use Ipsocode\Acl\Tenant;
 use Ipsocode\Acl\Tests\TestCase;
+use LogicException;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Workbench\App\Models\User;
 use Workbench\Database\Seeders\AclSeeder;
@@ -257,6 +262,32 @@ class TenantTest extends TestCase
         $this->actingAs($admin)->getJson('acl/roles')->assertOk();
         $this->actingAs($admin)->getJson('acl/teams')->assertOk()->assertJsonPath('data.0.name', 'acme team')->assertJsonCount(1, 'data');
         $this->actingAs($admin)->getJson("acl/teams/{$globex->id}")->assertNotFound();
+    }
+
+    public function testAUserModelWithoutHasTenantIsRefusedUnderTenants(): void
+    {
+        $user = new class extends Model {
+        };
+        $request = Request::create('/');
+        $request->setUserResolver(fn () => $user);
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('acl.tenant needs the user model to use the HasTenant trait.');
+
+        $this->app->make(ResolveAcl::class)->handle($request, fn (): Response => new Response);
+    }
+
+    public function testAUserWithoutATenantGetsA403(): void
+    {
+        (new AclSeeder)->run();
+
+        $user = User::factory()->create();
+        $team = AclTeam::create(['name' => 'Shared']);
+        $team->syncTeamRoles(['manager']);
+        $team->addUser($user);
+
+        $this->actingAs($user)->getJson('acl/teams')->assertForbidden()->assertJsonPath('message', 'The user has no tenant.');
+        $this->assertFalse(Tenant::check());
     }
 
     public function testTheApiStaysInTheCurrentTeamsTenant(): void
