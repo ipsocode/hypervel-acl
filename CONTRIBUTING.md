@@ -17,9 +17,11 @@ docker run --rm -it -v "$PWD":/app -w /app -e OTEL_SDK_DISABLED=true \
 composer update
 ```
 
-`OTEL_SDK_DISABLED=true` matters in that image: it has no protobuf extension,
-and without the variable the framework's OpenTelemetry exporters abort the run
-before the first test.
+`OTEL_SDK_DISABLED=true` matters in that image: without it the framework's
+OpenTelemetry exporters stay on, find no collector, and every run logs failed
+exports. `testbench.yaml` sets it for the Testbench commands (`composer test`,
+`composer test:coverage`, the database script); the variable above is for a plain
+`vendor/bin/phpunit`.
 
 No `composer.lock` is committed. Every install resolves against the current
 `hypervel/components` `0.4.x-dev` on Packagist, as CI does, so a framework
