@@ -19,6 +19,7 @@ use Ipsocode\Acl\Tenant;
 use Ipsocode\Acl\Workspace;
 use Ipsocode\Acl\Workspaces\Reach;
 use Ipsocode\Acl\Workspaces\RequestWorkspaceResolver;
+use LogicException;
 use stdClass;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -40,7 +41,8 @@ class ResolveAcl
     /**
      * Set the request's tenant, workspace and current team, and bring the user's roles up to date with the team.
      *
-     * A signed-in user acts in their tenant, when the user model has HasTenant. Without workspaces
+     * A signed-in user acts in their tenant, which with acl.tenant on the user model must name through
+     * HasTenant, else a LogicException is thrown, and a user without one is refused with 403. Without workspaces
      * they act as the one team of it they are a member of, else the request is refused. With
      * workspaces on, they act in the workspace the request names, else the one of their only org
      * role, else the home workspace, as the team of the org role held there or above it; with none,
@@ -54,17 +56,22 @@ class ResolveAcl
         $user = $request->user();
 
         if ($user !== null) {
-            if (method_exists($user, 'tenantKey')) {
-                Tenant::set($user->tenantKey());
-            }
-
             $tenant = Teams::tenantColumn();
+
+            // With tenants on, a request never runs unscoped: the user must name its tenant.
+            throw_if($tenant !== null && ! method_exists($user, 'tenantKey'), LogicException::class, 'acl.tenant needs the user model to use the HasTenant trait.');
+
+            if (method_exists($user, 'tenantKey')) {
+                $key = $user->tenantKey();
+
+                abort_if($tenant !== null && $key === null, 403, 'The user has no tenant.');
+
+                Tenant::set($key);
+            }
 
             $memberships = DB::table(Teams::ORGANIZATIONS_TABLE)
                 ->where(Teams::userPivotKey(), $user->getKey())
-                ->when($tenant !== null && Tenant::check(), fn ($query) => $query->where(
-                    fn ($query) => $query->whereNull($tenant)->orWhere($tenant, Tenant::id())
-                ))
+                ->when($tenant, fn ($query, string $tenant) => $query->where($tenant, Tenant::id()))
                 ->get([Teams::teamPivotKey() . ' as team', 'updated_at as changed', ...(Workspaces::enabled() ? [Workspaces::column() . ' as workspace'] : [])]);
 
             if (Workspaces::enabled()) {

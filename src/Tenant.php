@@ -6,6 +6,7 @@ namespace Ipsocode\Acl;
 
 use Closure;
 use Hypervel\Context\CoroutineContext;
+use LogicException;
 
 /**
  * The tenant the current request or job acts in, kept in the coroutine's own context so it
@@ -21,6 +22,16 @@ class Tenant
     public static function id(): int|string|null
     {
         return CoroutineContext::get(self::CONTEXT_KEY);
+    }
+
+    /**
+     * Get the current tenant, which a row of a tenant needs.
+     *
+     * @throws LogicException when no tenant is set
+     */
+    public static function required(): int|string
+    {
+        return static::id() ?? throw new LogicException('acl.tenant is on, so this needs a tenant: run it in Tenant::run(), or pass --tenant to the command.');
     }
 
     /**
@@ -44,7 +55,7 @@ class Tenant
     /**
      * Run the callback as a tenant, restoring the previous one afterwards.
      *
-     * A null tenant, as for a team without one, runs the callback as it is.
+     * A null tenant, as with acl.tenant off, runs the callback as it is.
      *
      * @template TReturn
      *

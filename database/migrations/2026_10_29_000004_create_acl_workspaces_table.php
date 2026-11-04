@@ -28,7 +28,7 @@ return new class extends Migration {
             $key->primary($table);
 
             if ($tenant !== null) {
-                $table->string($tenant)->nullable();
+                $table->string($tenant);
             }
 
             // The parent is a row of this same table; a workspace with children cannot be deleted.

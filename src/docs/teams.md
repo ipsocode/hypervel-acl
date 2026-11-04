@@ -27,7 +27,7 @@ A request without a session, such as an API request authenticated by token, keep
 
 ## Tenants
 
-Set `acl.tenant` to `true` to keep each tenant's roles, permissions and teams apart. The setup command then adds a tenant column, named by `acl.column_names.tenant_foreign_key`, to the five permission tables, the team table and the org role table, and puts the tenant first in the unique keys of role and permission names and of a user's org role, so two tenants may each have a role of the same name. If you enabled tenants on an earlier version, run `php artisan acl:setup` and `php artisan migrate` again: the `lead_tenant_unique_keys` migration it adds gives the keys to an install that already ran the tenant migration. Point `permission.models.role` and `permission.models.permission` at the package's `Ipsocode\Acl\Models\Role` and `Ipsocode\Acl\Models\Permission`, or add the `BelongsToTenant` trait to your own models.
+Set `acl.tenant` to `true` to keep each tenant's roles, permissions and teams apart. The setup command then adds a tenant column, named by `acl.column_names.tenant_foreign_key`, to the five permission tables, the team table and the org role table, and puts the tenant first in the unique keys of role and permission names and of a user's org role, so two tenants may each have a role of the same name. The tenant column is required wherever the package stamps it, so enable `acl.tenant` before anything is seeded: the migration that adds the column to an existing table fails while the table has rows, which would have no tenant. If you enabled tenants on an earlier version, run `php artisan acl:setup` and `php artisan migrate` again: the `lead_tenant_unique_keys` migration it adds gives the keys to an install that already ran the tenant migration. An install that ran the tenant migrations of an earlier version keeps its tenant columns nullable. Its rows with no tenant, such as roles seeded outside a tenant, are no longer seen by any tenant, and org roles with no tenant no longer count. Give each of those rows its tenant, or delete it, before upgrading. Point `permission.models.role` and `permission.models.permission` at the package's `Ipsocode\Acl\Models\Role` and `Ipsocode\Acl\Models\Permission`, or add the `BelongsToTenant` trait to your own models.
 
 The current tenant lives in `Ipsocode\Acl\Tenant`, for the current request or job only:
 
@@ -37,9 +37,11 @@ Tenant::run('acme', function () {
 });
 ```
 
-Models with `BelongsToTenant` see the current tenant's rows and the shared ones that have no tenant, and new models are stamped with the current tenant. So roles seeded without a tenant are shared by every tenant. The package also keys the permission cache by tenant, so each tenant checks against its own roles and permissions.
+Models with `BelongsToTenant` see the current tenant's rows only, and new models are stamped with the current tenant. No row is shared between tenants: creating a role, permission, team or workspace with no tenant, given or current, throws a `LogicException`, and so does seeding outside a tenant, so seed each tenant's catalog in its own tenant. The package also keys the permission cache by tenant, so each tenant checks against its own roles and permissions.
 
-Add the `HasTenant` trait to your user model, and `ResolveAcl` sets the user's tenant on each request. By default it reads the user's tenant column; override `tenantKey()` to take the tenant from somewhere else.
+Add the `HasTenant` trait to your user model, and `ResolveAcl` sets the user's tenant on each request. By default it reads the user's tenant column; override `tenantKey()` to take the tenant from somewhere else. With `acl.tenant` on, a request never runs unscoped: `ResolveAcl` throws a `LogicException` for a signed-in user whose model does not use `HasTenant`, and refuses a user whose tenant is `null` with 403.
+
+Nothing sets the tenant for you outside a request. A queued job or a code path that runs on its own has to wrap its work in `Tenant::run()`, and a console command takes the tenant from its `--tenant` option (see [The current team](#the-current-team)). Creating a model with no tenant throws a `LogicException` that says so.
 
 A user is in one team per tenant. With `acl.tenant` off, all teams are one tenant. `addUser()` throws `UserAlreadyInTeam` for a second team in the tenant. Remove the user from the first team to move them.
 
@@ -49,4 +51,9 @@ A team holds the roles of the team named by its `inherit_id`, which is a row of 
 
 ## The current team
 
-`ResolveAcl` sets the current tenant and team for a request. A signed-in user must be in exactly one team of their tenant, else the request is refused with 403. Every console command accepts `--team=<id>`.
+`ResolveAcl` sets the current tenant and team for a request. A signed-in user must be in exactly one team of their tenant, else the request is refused with 403. Every console command accepts `--tenant=<id>` and `--team=<id>`, which select the tenant and the team the command runs in. `--team` also selects the team's own tenant, so `--team` alone is enough for a command to run in the right tenant. When both are given and the team belongs to another tenant, the command fails with an `InvalidArgumentException` before it runs, so a team is never used under a tenant it is not in. A command run with neither option has no tenant, and with `acl.tenant` on it throws a `LogicException` where it needs one.
+
+```bash
+php artisan db:seed --class=AclSeeder --tenant=acme
+php artisan db:seed --class=AclSeeder --team=7
+```
