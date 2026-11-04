@@ -39,7 +39,9 @@ Tenant::run('acme', function () {
 
 Models with `BelongsToTenant` see the current tenant's rows only, and new models are stamped with the current tenant. No row is shared between tenants: creating a role, permission, team or workspace with no tenant, given or current, throws a `LogicException`, and so does seeding outside a tenant, so seed each tenant's catalog in its own tenant. The package also keys the permission cache by tenant, so each tenant checks against its own roles and permissions.
 
-Add the `HasTenant` trait to your user model, and `ResolveAcl` sets the user's tenant on each request. By default it reads the user's tenant column; override `tenantKey()` to take the tenant from somewhere else.
+Add the `HasTenant` trait to your user model, and `ResolveAcl` sets the user's tenant on each request. By default it reads the user's tenant column; override `tenantKey()` to take the tenant from somewhere else. With `acl.tenant` on, a request never runs unscoped: `ResolveAcl` throws a `LogicException` for a signed-in user whose model does not use `HasTenant`, and refuses a user whose tenant is `null` with 403.
+
+Nothing sets the tenant for you outside a request. A queued job or a code path that runs on its own has to wrap its work in `Tenant::run()`, and a console command takes the tenant from its `--tenant` option (see [The current team](#the-current-team)). Creating a model with no tenant throws a `LogicException` that says so.
 
 A user is in one team per tenant. With `acl.tenant` off, all teams are one tenant. `addUser()` throws `UserAlreadyInTeam` for a second team in the tenant. Remove the user from the first team to move them.
 
@@ -49,4 +51,9 @@ A team holds the roles of the team named by its `inherit_id`, which is a row of 
 
 ## The current team
 
-`ResolveAcl` sets the current tenant and team for a request. A signed-in user must be in exactly one team of their tenant, else the request is refused with 403. Every console command accepts `--team=<id>`.
+`ResolveAcl` sets the current tenant and team for a request. A signed-in user must be in exactly one team of their tenant, else the request is refused with 403. Every console command accepts `--tenant=<id>` and `--team=<id>`, which select the tenant and the team the command runs in. `--team` also selects the team's own tenant, so `--team` alone is enough for a command to run in the right tenant. When both are given and the team belongs to another tenant, the command fails with an `InvalidArgumentException` before it runs, so a team is never used under a tenant it is not in. A command run with neither option has no tenant, and with `acl.tenant` on it throws a `LogicException` where it needs one.
+
+```bash
+php artisan db:seed --class=AclSeeder --tenant=acme
+php artisan db:seed --class=AclSeeder --team=7
+```
