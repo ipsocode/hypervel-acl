@@ -260,8 +260,18 @@ class SetupTest extends TestCase
             file_put_contents($path, str_replace("'teams' => true,", "'teams' => false,", file_get_contents($path)));
             $this->artisan('acl:setup')
                 ->expectsConfirmation('Turn on teams in config/permission.php?', 'no')
+                ->doesntExpectOutputToContain('run this command again')
                 ->assertExitCode(1);
             $this->assertStringContainsString("'teams' => false,", file_get_contents($path));
+
+            // A second 'teams' => false, is ambiguous: the file is left as it is and the user told.
+            file_put_contents($path, str_replace("'teams' => false,", "'teams' => false,\n    'other' => ['teams' => false,],", file_get_contents($path)));
+            $this->artisan('acl:setup')
+                ->expectsConfirmation('Turn on teams in config/permission.php?', 'yes')
+                ->expectsOutputToContain("Set 'teams' => true")
+                ->doesntExpectOutputToContain('run this command again')
+                ->assertExitCode(1);
+            $this->assertSame(2, substr_count(file_get_contents($path), "'teams' => false,"));
         } finally {
             @unlink($path);
         }
@@ -299,6 +309,40 @@ class SetupTest extends TestCase
         } finally {
             array_map('unlink', array_diff(glob(database_path('migrations/*')), $before));
             @unlink($seeder);
+        }
+    }
+
+    public function testNoMigrateHintIsPrintedWhenTheOfferedSetupPublishedNothing(): void
+    {
+        config(['permission.table_names.roles' => 'unmigrated_roles']);
+        $before = glob(database_path('migrations/*'));
+
+        try {
+            $this->artisan('acl:make-seeder', ['name' => 'TmpDeclinedSeeder'])
+                ->expectsConfirmation('Run acl:setup now to publish the permission migrations?', 'yes')
+                ->expectsConfirmation('Proceed with the migration creation?', 'no')
+                ->doesntExpectOutputToContain('php artisan migrate, then run this command again')
+                ->assertExitCode(1);
+            $this->assertSame($before, glob(database_path('migrations/*')));
+        } finally {
+            array_map('unlink', array_diff(glob(database_path('migrations/*')), $before));
+        }
+    }
+
+    public function testAPublishedPermissionMigrationGetsTheMigrateHintAndNoOffer(): void
+    {
+        config(['permission.table_names.roles' => 'unmigrated_roles']);
+        $before = glob(database_path('migrations/*'));
+        $migration = database_path('migrations/2099_01_01_000000_create_permission_tables.php');
+
+        try {
+            file_put_contents($migration, '<?php');
+
+            $this->artisan('acl:make-seeder', ['name' => 'TmpPublishedSeeder'])
+                ->expectsOutputToContain('run php artisan migrate, then run this command again')
+                ->assertExitCode(1);
+        } finally {
+            array_map('unlink', array_diff(glob(database_path('migrations/*')), $before));
         }
     }
 

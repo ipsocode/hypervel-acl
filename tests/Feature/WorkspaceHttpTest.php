@@ -8,12 +8,17 @@ use Hypervel\Database\QueryException;
 use Hypervel\Http\Request;
 use Hypervel\Permission\Support\Config;
 use Hypervel\Support\Facades\DB;
+use Hypervel\Testbench\Attributes\WithConfig;
+use Ipsocode\Acl\Access\AccessSync;
 use Ipsocode\Acl\Models\AclTeam;
 use Ipsocode\Acl\Models\AclWorkspace;
 use Ipsocode\Acl\Support\Teams;
+use Ipsocode\Acl\Tests\Fixtures\AppWorkspace;
 use Ipsocode\Acl\Tests\WorkspaceTestCase;
 use Ipsocode\Acl\Workspaces\Reach;
 use Ipsocode\Acl\Workspaces\RequestWorkspaceResolver;
+use Mockery as m;
+use RuntimeException;
 use Workbench\App\Models\User;
 use Workbench\Database\Seeders\AclSeeder;
 
@@ -55,6 +60,13 @@ class WorkspaceHttpTest extends WorkspaceTestCase
         $this->getJson('acl/workspaces?kind=branch')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.name', 'Branch');
 
         $this->withHeader('X-Workspace', (string) $this->north->id)->getJson('acl/workspaces')->assertOk()->assertJsonCount(2, 'data');
+    }
+
+    #[WithConfig('acl.models.workspace', AppWorkspace::class)]
+    public function testWorkspacesAreListedBeneathOneForAnApplicationsOwnModel(): void
+    {
+        $this->getJson('acl/workspaces')->assertOk()->assertJsonCount(4, 'data');
+        $this->getJson('acl/workspaces?under=' . $this->north->id)->assertOk()->assertJsonCount(2, 'data');
     }
 
     public function testAWorkspaceNameIsUniqueBeneathItsParent(): void
@@ -214,6 +226,46 @@ class WorkspaceHttpTest extends WorkspaceTestCase
 
         $north->deleteJson("acl/teams/{$ops->id}/users/{$inNorth->id}")->assertNoContent();
         $this->assertSame(0, DB::table(Teams::ORGANIZATIONS_TABLE)->where('user_id', $inNorth->id)->count());
+    }
+
+    public function testRemovingAMemberBelowHomeReleasesTheirRolesOnceInOneTransaction(): void
+    {
+        $ops = AclTeam::create(['name' => 'Ops']);
+        $ops->syncTeamRoles(['manager']);
+        $south = AclWorkspace::create(['name' => 'South', 'parent_id' => $this->north->id]);
+        $user = User::factory()->create();
+        $ops->addUser($user, $this->branch->id);
+        $ops->addUser($user, $south->id);
+
+        DB::enableQueryLog();
+
+        $this->withHeader('X-Workspace', (string) $this->north->id)->deleteJson("acl/teams/{$ops->id}/users/{$user->id}")->assertNoContent();
+
+        $deletes = array_filter(DB::getQueryLog(), fn (array $query): bool => str_starts_with($query['query'], 'delete from') && str_contains($query['query'], Config::modelHasRolesTable()));
+
+        $this->assertCount(1, $deletes);
+        $this->assertSame(0, DB::table(Teams::ORGANIZATIONS_TABLE)->where('user_id', $user->id)->count());
+    }
+
+    public function testAFailedReleaseLeavesTheOrgRolesInPlace(): void
+    {
+        $ops = AclTeam::create(['name' => 'Ops']);
+        $user = User::factory()->create();
+        $ops->addUser($user, $this->branch->id);
+
+        $failure = new RuntimeException('The connection was lost.');
+        $sync = m::mock(AccessSync::class);
+        $sync->shouldReceive('releaseMember')->once()->andThrow($failure);
+        $this->app->instance(AccessSync::class, $sync);
+
+        try {
+            $ops->removeUser($user, [$this->branch->id]);
+            $this->fail('The release should have failed.');
+        } catch (RuntimeException $thrown) {
+            $this->assertSame($failure, $thrown);
+        }
+
+        $this->assertSame(1, DB::table(Teams::ORGANIZATIONS_TABLE)->where('user_id', $user->id)->count());
     }
 
     public function testAWorkspaceKeyMustBeOneKey(): void

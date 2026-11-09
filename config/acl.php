@@ -52,6 +52,8 @@ return [
     | is the column of the workspace model that holds the workspace it is beneath.
     | "teams_inherit_key" is the column of the team table that holds the key of the
     | team whose roles a team inherits; leave it as is for the package's own team table.
+    | "user_pivot_key" is the user column of the acl_organizations table; leave it null
+    | for "user_id". Its team column is permission.column_names.team_foreign_key.
     | "tenant_foreign_key" is the column of the team table that holds the tenant a team
     | belongs to; leave it null for a single tenant. A user is in one team per tenant.
     |
@@ -61,6 +63,7 @@ return [
         'workspace_foreign_key' => 'workspace_id',
         'workspace_parent' => 'parent_id',
         'teams_inherit_key' => 'inherit_id',
+        'user_pivot_key' => null,
         'tenant_foreign_key' => null,
     ],
 

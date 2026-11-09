@@ -12,26 +12,30 @@ use Symfony\Component\HttpFoundation\Response;
 
 class PermissionController extends Controller
 {
+    public function __construct(protected PermissionRegistrar $registrar)
+    {
+    }
+
     public function index(): Response
     {
-        return PermissionResource::collection(app(PermissionRegistrar::class)->getPermissionClass()::query()->orderBy('name')->get())->response();
+        return PermissionResource::collection($this->registrar->getPermissionClass()::query()->orderBy('name')->get())->response();
     }
 
     public function store(Request $request): Response
     {
         $data = $request->validate(['name' => ['required', 'string'], 'guard_name' => ['sometimes', 'string']]);
 
-        return (new PermissionResource(app(PermissionRegistrar::class)->getPermissionClass()::findOrCreate($data['name'], $data['guard_name'] ?? null)))->response()->setStatusCode(201);
+        return (new PermissionResource($this->registrar->getPermissionClass()::findOrCreate($data['name'], $data['guard_name'] ?? null)))->response()->setStatusCode(201);
     }
 
     public function show(int|string $permission): Response
     {
-        return (new PermissionResource(app(PermissionRegistrar::class)->getPermissionClass()::query()->findOrFail($permission)))->response();
+        return (new PermissionResource($this->registrar->getPermissionClass()::query()->findOrFail($permission)))->response();
     }
 
     public function update(Request $request, int|string $permission): Response
     {
-        $permission = app(PermissionRegistrar::class)->getPermissionClass()::query()->findOrFail($permission);
+        $permission = $this->registrar->getPermissionClass()::query()->findOrFail($permission);
         $permission->update($request->validate(['name' => ['required', 'string']]));
 
         return (new PermissionResource($permission))->response();
@@ -39,7 +43,7 @@ class PermissionController extends Controller
 
     public function destroy(int|string $permission): Response
     {
-        app(PermissionRegistrar::class)->getPermissionClass()::query()->findOrFail($permission)->delete();
+        $this->registrar->getPermissionClass()::query()->findOrFail($permission)->delete();
 
         return response()->noContent();
     }

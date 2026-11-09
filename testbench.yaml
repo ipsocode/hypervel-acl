@@ -14,6 +14,10 @@ env:
   # SQLite enforces foreign keys only when asked; the composite keys are part of what is tested.
   DB_FOREIGN_KEYS: true
   TELESCOPE_ENABLED: false
+  # The framework's OpenTelemetry exporters have no collector in a test run, so the SDK is off. It has to be
+  # here: phpunit.xml cannot set it (PHPUnit turns "true" into 1, which the SDK rejects as a boolean and
+  # reads as false), and the database workflow sets nothing, so this is where its jobs get it.
+  OTEL_SDK_DISABLED: true
 
 seeders:
   - Workbench\Database\Seeders\DatabaseSeeder
