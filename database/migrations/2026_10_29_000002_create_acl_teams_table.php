@@ -35,7 +35,7 @@ return new class extends Migration {
             $key->reference($table, $inherited)->nullable()->constrained($name);
 
             $table->string('name');
-            $table->json('meta')->nullable();
+            $table->text('meta')->nullable();
             $table->timestamps();
 
             $table->unique($tenant === null ? ['name'] : [$tenant, 'name']);

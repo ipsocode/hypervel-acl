@@ -10,9 +10,9 @@ return [
     |
     | Teams are the framework's own: set permission.teams to true and name the
     | model in permission.models.team, either the package's Ipsocode\Acl\Models\AclTeam
-    | (whose table is "table_names.acl_teams") or your own that uses
-    | Ipsocode\Acl\Concerns\IsTeam. A team holds the roles of the team named by its
-    | "teams_inherit_id" column, which holds the key of another row of the same table.
+    | (whose table is "acl_teams") or your own that uses
+    | Ipsocode\Acl\Concerns\IsTeam. A team holds the roles of the team whose key
+    | its "column_names.teams_inherit_key" column holds, another row of the same table.
     | An interactive "acl:*" command offers to publish the permission config and turn
     | its teams on.
     */
@@ -50,6 +50,9 @@ return [
     | "workspace_foreign_key" is the column that partitions hypervel/permission's tables when
     | "workspace" below is true; workspace 0 is the home workspace. "workspace_parent"
     | is the column of the workspace model that holds the workspace it is beneath.
+    | "teams_inherit_key" is the column of the team table that holds the key of the
+    | team whose roles a team inherits. The package's team migration creates it under
+    | this name, so set it before migrating and keep it the same afterwards.
     | "user_pivot_key" is the user column of the acl_organizations table; leave it null
     | for "user_id". Its team column is permission.column_names.team_foreign_key.
     | "tenant_foreign_key" is the column of the team table that holds the tenant a team

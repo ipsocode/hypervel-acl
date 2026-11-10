@@ -36,7 +36,7 @@ return new class extends Migration {
 
             $table->string('name');
             $table->string('kind')->nullable();
-            $table->json('meta')->nullable();
+            $table->text('meta')->nullable();
             $table->timestamps();
 
             $table->unique($tenant === null ? [$parent, 'name'] : [$tenant, $parent, 'name']);
