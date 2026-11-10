@@ -5,18 +5,23 @@ declare(strict_types=1);
 namespace Ipsocode\Acl\Tests\Feature;
 
 use Hypervel\Contracts\Foundation\Application;
+use Hypervel\Database\Eloquent\Model;
+use Hypervel\Http\Request;
 use Hypervel\Permission\PermissionRegistrar;
 use Hypervel\Support\Facades\DB;
 use Hypervel\Support\Facades\Schema;
 use Ipsocode\Acl\Exceptions\UserAlreadyInTeam;
 use Ipsocode\Acl\Http\Controllers\TeamController;
+use Ipsocode\Acl\Http\Middleware\ResolveAcl;
 use Ipsocode\Acl\Models\AclTeam;
 use Ipsocode\Acl\Models\Permission;
 use Ipsocode\Acl\Models\Role;
 use Ipsocode\Acl\Permission\TenantPermissionRegistrar;
 use Ipsocode\Acl\Tenant;
 use Ipsocode\Acl\Tests\TestCase;
+use LogicException;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Workbench\App\Models\User;
 use Workbench\Database\Seeders\AclSeeder;
@@ -38,6 +43,16 @@ class TenantTest extends TestCase
         parent::defineDatabaseMigrations();
 
         $this->loadMigrationsFrom(__DIR__ . '/../Fixtures/tenant-migrations');
+    }
+
+    /**
+     * Seed the role catalog of each tenant.
+     */
+    protected function seedTenants(string ...$tenants): void
+    {
+        foreach ($tenants as $tenant) {
+            Tenant::run($tenant, fn () => (new AclSeeder)->run());
+        }
     }
 
     /**
@@ -70,27 +85,24 @@ class TenantTest extends TestCase
         });
     }
 
-    public function testASharedTeamInheritedByAnotherTenantsTeamCannotBeDeleted(): void
+    public function testATeamInheritedByAnotherTenantsTeamCannotBeDeleted(): void
     {
-        (new AclSeeder)->run();
+        $this->seedTenants('acme');
 
-        $team = AclTeam::create(['name' => 'Admins']);
-        $team->syncTeamRoles(['manager']);
-        $user = User::factory()->create();
-        $team->addUser($user);
-        $shared = AclTeam::create(['name' => 'Shared']);
-        AclTeam::create(['name' => 'Other lead', 'tenant' => 'other', 'inherit_id' => $shared->id]);
+        [$team] = $this->member('acme', ['manager']);
+        $lead = AclTeam::create(['name' => 'Lead', 'tenant' => 'acme']);
+        AclTeam::create(['name' => 'Other lead', 'tenant' => 'other', 'inherit_id' => $lead->id]);
 
         $this->app->make(PermissionRegistrar::class)->setPermissionsTeamId($team);
 
         try {
-            Tenant::run('acme', fn () => $this->app->make(TeamController::class)->destroy($shared->id));
-            $this->fail('The shared team was deleted.');
+            Tenant::run('acme', fn () => $this->app->make(TeamController::class)->destroy($lead->id));
+            $this->fail('The inherited team was deleted.');
         } catch (HttpException $e) {
             $this->assertSame(409, $e->getStatusCode());
         }
 
-        $this->assertNotNull(AclTeam::query()->withoutGlobalScope('acl_tenant')->find($shared->id));
+        $this->assertNotNull(AclTeam::query()->withoutGlobalScope('acl_tenant')->find($lead->id));
     }
 
     public function testTheTenantColumnIsOnThePermissionAndTeamTables(): void
@@ -149,9 +161,9 @@ class TenantTest extends TestCase
         $this->assertSame('globex', $globex);
     }
 
-    public function testRolesAndPermissionsAreScopedToTheTenantAndShareTheUntenanted(): void
+    public function testRolesAndPermissionsAreScopedToTheTenant(): void
     {
-        (new AclSeeder)->run();
+        $this->seedTenants('acme');
 
         Tenant::run('acme', function (): void {
             Role::create(['name' => 'auditor', 'team_id' => null]);
@@ -162,14 +174,28 @@ class TenantTest extends TestCase
         $this->assertFalse(Tenant::run('globex', fn () => Role::query()->where('name', 'auditor')->exists()));
         $this->assertFalse(Tenant::run('globex', fn () => Permission::query()->where('name', 'reports.view')->exists()));
 
-        // The seeded roles have no tenant: every tenant shares them.
-        $this->assertTrue(Tenant::run('globex', fn () => Role::query()->where('name', 'viewer')->exists()));
+        // The catalog seeded for acme is acme's alone.
         $this->assertTrue(Tenant::run('acme', fn () => Role::query()->where('name', 'viewer')->exists()));
+        $this->assertFalse(Tenant::run('globex', fn () => Role::query()->where('name', 'viewer')->exists()));
+    }
+
+    public function testNothingIsCreatedWithoutATenant(): void
+    {
+        foreach ([fn () => Role::create(['name' => 'auditor']), fn () => Permission::create(['name' => 'reports.view']), fn () => AclTeam::create(['name' => 'Ops']), fn () => (new AclSeeder)->run()] as $create) {
+            try {
+                $create();
+                $this->fail('A row was created without a tenant.');
+            } catch (LogicException $e) {
+                $this->assertStringStartsWith('acl.tenant is on, so this needs a tenant', $e->getMessage());
+            }
+        }
+
+        $this->assertSame(0, Role::query()->count() + Permission::query()->count() + AclTeam::query()->count());
     }
 
     public function testEachTenantChecksAgainstItsOwnCatalog(): void
     {
-        (new AclSeeder)->run();
+        $this->seedTenants('acme', 'globex');
 
         foreach (['acme' => 'reports.view', 'globex' => 'invoices.view'] as $tenant => $permission) {
             Tenant::run($tenant, function () use ($permission): void {
@@ -200,7 +226,7 @@ class TenantTest extends TestCase
 
     public function testAChangeInOneTenantIsSeenThere(): void
     {
-        (new AclSeeder)->run();
+        $this->seedTenants('acme');
 
         [$team, $user] = $this->member('acme', ['viewer']);
 
@@ -213,18 +239,17 @@ class TenantTest extends TestCase
 
     public function testTeamsAreScopedAndStampedWithTheTenant(): void
     {
-        $shared = AclTeam::create(['name' => 'Shared']);
         $acme = Tenant::run('acme', fn () => AclTeam::create(['name' => 'Ops']));
+        AclTeam::create(['name' => 'Sales', 'tenant' => 'globex']);
 
         $this->assertSame('acme', $acme->tenant());
-        $this->assertNull($shared->tenant());
-        $this->assertSame(['Ops', 'Shared'], Tenant::run('acme', fn () => AclTeam::query()->orderBy('name')->pluck('name')->all()));
-        $this->assertSame(['Shared'], Tenant::run('globex', fn () => AclTeam::query()->pluck('name')->all()));
+        $this->assertSame(['Ops'], Tenant::run('acme', fn () => AclTeam::query()->pluck('name')->all()));
+        $this->assertSame(['Sales'], Tenant::run('globex', fn () => AclTeam::query()->pluck('name')->all()));
     }
 
     public function testAUserIsInOneTeamPerTenantButOneInEachTenant(): void
     {
-        (new AclSeeder)->run();
+        $this->seedTenants('acme', 'globex');
 
         $acme = AclTeam::create(['name' => 'Ops', 'tenant' => 'acme']);
         $acmeSales = AclTeam::create(['name' => 'Sales', 'tenant' => 'acme']);
@@ -245,7 +270,7 @@ class TenantTest extends TestCase
 
     public function testTheMiddlewareActsInTheUsersTenant(): void
     {
-        (new AclSeeder)->run();
+        $this->seedTenants('acme', 'globex');
 
         [$admins, $admin] = $this->member('acme', ['manager']);
 
@@ -259,9 +284,35 @@ class TenantTest extends TestCase
         $this->actingAs($admin)->getJson("acl/teams/{$globex->id}")->assertNotFound();
     }
 
-    public function testTheApiStaysInTheCurrentTeamsTenant(): void
+    public function testAUserModelWithoutHasTenantIsRefusedUnderTenants(): void
     {
-        (new AclSeeder)->run();
+        $user = new class extends Model {
+        };
+        $request = Request::create('/');
+        $request->setUserResolver(fn () => $user);
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('acl.tenant needs the user model to use the HasTenant trait.');
+
+        $this->app->make(ResolveAcl::class)->handle($request, fn (): Response => new Response);
+    }
+
+    public function testAUserWithoutATenantGetsA403(): void
+    {
+        $this->seedTenants('acme');
+
+        $user = User::factory()->create();
+        $team = AclTeam::create(['name' => 'Ops', 'tenant' => 'acme']);
+        $team->syncTeamRoles(['manager']);
+        $team->addUser($user);
+
+        $this->actingAs($user)->getJson('acl/teams')->assertForbidden()->assertJsonPath('message', 'The user has no tenant.');
+        $this->assertFalse(Tenant::check());
+    }
+
+    public function testTheApiStaysInTheCurrentTenant(): void
+    {
+        $this->seedTenants('acme');
 
         [$admins, $admin] = $this->member('acme', ['manager']);
         $foreign = AclTeam::create(['name' => 'Admins', 'tenant' => 'globex']);
@@ -276,7 +327,7 @@ class TenantTest extends TestCase
 
     public function testUpdatingATeamLooksUpTheCurrentTeamOnce(): void
     {
-        (new AclSeeder)->run();
+        $this->seedTenants('acme');
 
         [$admins, $admin] = $this->member('acme', ['manager']);
         $ops = AclTeam::create(['name' => 'Ops', 'tenant' => 'acme']);
@@ -293,8 +344,8 @@ class TenantTest extends TestCase
 
         $this->putJson("acl/teams/{$ops->id}", ['name' => 'Operations'])->assertOk()->assertJsonPath('data.tenant', 'acme');
 
-        // The form request reads it once to validate; the controller must add one, not two.
-        $this->assertSame(2, $lookups);
+        // The form request reads it once to validate; the controller takes the tenant from the request.
+        $this->assertSame(1, $lookups);
     }
 
     public function testTheSameCatalogCanBeSeededForEveryTenant(): void

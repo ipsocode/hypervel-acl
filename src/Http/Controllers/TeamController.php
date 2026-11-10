@@ -22,6 +22,7 @@ use Ipsocode\Acl\Http\Resources\TeamResource;
 use Ipsocode\Acl\Support\Config;
 use Ipsocode\Acl\Support\Teams;
 use Ipsocode\Acl\Support\Workspaces;
+use Ipsocode\Acl\Tenant;
 use Ipsocode\Acl\Workspace;
 use Ipsocode\Acl\Workspaces\Reach;
 use Symfony\Component\HttpFoundation\Response;
@@ -182,15 +183,15 @@ class TeamController extends Controller
     }
 
     /**
-     * Get the tenant of the current team, or null with tenants off.
+     * Get the current tenant, which the current team belongs to, or null with tenants off.
      */
     protected function tenant(): int|string|null
     {
-        return Teams::tenantColumn() === null ? null : Teams::query()->find($this->registrar->getPermissionsTeamId())?->tenant();
+        return Teams::tenantColumn() === null ? null : Tenant::required();
     }
 
     /**
-     * Get the teams of the current team's tenant.
+     * Get the teams of the current tenant.
      *
      * @return Builder<Model&Team>
      */

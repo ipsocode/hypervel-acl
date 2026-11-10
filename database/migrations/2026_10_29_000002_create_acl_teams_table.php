@@ -26,9 +26,9 @@ return new class extends Migration {
         Schema::create($name, function (Blueprint $table) use ($name, $tenant, $inherited, $key): void {
             $key->primary($table);
 
-            // A team without a tenant is shared by every tenant.
+            // Every team belongs to a tenant; none is shared.
             if ($tenant !== null) {
-                $table->string($tenant)->nullable();
+                $table->string($tenant);
             }
 
             // The inherited team is a row of this same table.

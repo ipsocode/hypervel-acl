@@ -9,6 +9,7 @@ use Ipsocode\Acl\Models\AclWorkspace;
 use Ipsocode\Acl\Tenant;
 use Ipsocode\Acl\Tests\WorkspaceTestCase;
 use Ipsocode\Acl\Workspaces\Reach;
+use LogicException;
 
 class WorkspaceTenantTest extends WorkspaceTestCase
 {
@@ -23,17 +24,21 @@ class WorkspaceTenantTest extends WorkspaceTestCase
     public function testAWorkspaceOfAnotherTenantDoesNotExist(): void
     {
         $theirs = Tenant::run('other', fn () => AclWorkspace::create(['name' => 'Theirs']));
-        $shared = AclWorkspace::create(['name' => 'Shared']);
         $reach = $this->app->make(Reach::class);
 
         $this->assertSame('other', $theirs->tenant);
-        $this->assertNull($shared->tenant);
 
         $this->assertFalse(Tenant::run('acme', fn () => $reach->exists($theirs->id)));
         $this->assertTrue(Tenant::run('other', fn () => $reach->exists($theirs->id)));
 
-        // A workspace without a tenant belongs to all, and so does a request with none.
-        $this->assertTrue(Tenant::run('acme', fn () => $reach->exists($shared->id)));
+        // A caller outside a request, with no tenant, reaches every workspace.
         $this->assertTrue($reach->exists($theirs->id));
+    }
+
+    public function testAWorkspaceCannotBeCreatedWithoutATenant(): void
+    {
+        $this->expectException(LogicException::class);
+
+        AclWorkspace::create(['name' => 'Shared']);
     }
 }

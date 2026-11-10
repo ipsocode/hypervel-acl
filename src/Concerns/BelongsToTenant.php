@@ -11,7 +11,8 @@ use Ipsocode\Acl\Tenant;
 
 /**
  * Scopes a model to the current tenant, with acl.tenant on: its queries see the tenant's rows
- * and the shared ones without a tenant, and a model created in a tenant is stamped with it.
+ * only, and a new model is stamped with the current tenant. No row is shared between tenants,
+ * so a model created with no tenant, given or current, throws.
  *
  * Route-model binding runs through the scope too, so another tenant's record resolves to a 404.
  */
@@ -27,17 +28,15 @@ trait BelongsToTenant
             $tenant = Tenant::id();
 
             if ($column !== null && $tenant !== null) {
-                $qualified = $builder->qualifyColumn($column);
-
-                $builder->where(fn (Builder $query) => $query->whereNull($qualified)->orWhere($qualified, $tenant));
+                $builder->where($builder->qualifyColumn($column), $tenant);
             }
         });
 
         static::creating(static function (Model $model): void {
             $column = Teams::tenantColumn();
 
-            if ($column !== null && Tenant::check() && ($model->getAttributes()[$column] ?? null) === null) {
-                $model->setAttribute($column, Tenant::id());
+            if ($column !== null && ($model->getAttributes()[$column] ?? null) === null) {
+                $model->setAttribute($column, Tenant::required());
             }
         });
     }

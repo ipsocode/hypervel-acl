@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Hypervel\Database\Migrations\Migration;
 use Hypervel\Database\Schema\Blueprint;
+use Hypervel\Support\Facades\DB;
 use Hypervel\Support\Facades\Schema;
 use Ipsocode\Acl\Support\KeyType;
 use Ipsocode\Acl\Support\Teams;
@@ -15,7 +16,10 @@ return new class extends Migration {
      *
      * Adds the parent column, and with acl.tenant on the tenant column, to the application's own
      * workspace table, wherever either is missing. The parent holds the key of another row of
-     * the same table.
+     * the same table. No workspace is shared between tenants, so the tenant column is required,
+     * and a workspace already there, which would have no tenant, fails the migration.
+     *
+     * @throws RuntimeException when the workspace table already has rows and no tenant column
      */
     public function up(): void
     {
@@ -26,14 +30,20 @@ return new class extends Migration {
         $tenant = Teams::tenantColumn();
         $key = KeyType::fromModel($model);
 
+        $addTenant = $tenant !== null && ! Schema::hasColumn($name, $tenant);
+
+        throw_if($addTenant && DB::table($name)->exists(), RuntimeException::class, "Table [{$name}] already has rows, which would have no tenant. Add the [{$tenant}] column yourself and give every workspace its tenant.");
+
         if (! Schema::hasColumn($name, $parent)) {
             Schema::table($name, function (Blueprint $table) use ($name, $parent, $key, $workspace): void {
                 $key->reference($table, $parent)->nullable()->constrained($name, $workspace->getKeyName());
             });
         }
 
-        if ($tenant !== null && ! Schema::hasColumn($name, $tenant)) {
+        if ($addTenant) {
+            // SQLite cannot add a required column without a default: add it nullable, then require it.
             Schema::table($name, static fn (Blueprint $table) => $table->string($tenant)->nullable());
+            Schema::table($name, static fn (Blueprint $table) => $table->string($tenant)->nullable(false)->change());
         }
     }
 

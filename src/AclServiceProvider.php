@@ -14,6 +14,7 @@ use Hypervel\Support\Facades\Event;
 use Hypervel\Support\Facades\File;
 use Hypervel\Support\Facades\Route;
 use Hypervel\Support\ServiceProvider;
+use InvalidArgumentException;
 use Ipsocode\Acl\Access\AccessSync;
 use Ipsocode\Acl\Console\MakeAclSeederCommand;
 use Ipsocode\Acl\Console\SetupCommand;
@@ -137,7 +138,7 @@ class AclServiceProvider extends ServiceProvider
     }
 
     /**
-     * Add the global --team and --workspace options, the way --env works.
+     * Add the global --team, --tenant and --workspace options, the way --env works.
      */
     protected function registerConsoleOptions(): void
     {
@@ -155,12 +156,38 @@ class AclServiceProvider extends ServiceProvider
                 InputOption::VALUE_REQUIRED,
                 'The workspace to run the command in',
             ));
+
+            $event->artisan->getDefinition()->addOption(new InputOption(
+                'tenant',
+                null,
+                InputOption::VALUE_REQUIRED,
+                'The tenant to run the command in; --team implies its own',
+            ));
         });
 
         // BeforeHandle runs inside the command's own coroutine, where Context writes are visible.
         Event::listen(BeforeHandle::class, static function (BeforeHandle $event): void {
+            $tenant = $event->input->hasParameterOption('--tenant') ? $event->input->getParameterOption('--tenant', null, true) : null;
+
             if ($event->input->hasParameterOption('--team')) {
-                setPermissionsTeamId($event->input->getParameterOption('--team', null, true));
+                $team = $event->input->getParameterOption('--team', null, true);
+
+                setPermissionsTeamId($team);
+
+                // The team's tenant is read without the tenant scope, the way ResolveAcl and AccessSync read it.
+                $teamTenant = Teams::tenantColumn() === null
+                    ? null
+                    : Teams::query()->withoutGlobalScope(Teams::TENANT_SCOPE)->whereKey($team)->first()?->tenant();
+
+                if ($tenant !== null && $teamTenant !== null && (string) $tenant !== (string) $teamTenant) {
+                    throw new InvalidArgumentException("The team [{$team}] belongs to tenant [{$teamTenant}], not [{$tenant}].");
+                }
+
+                $tenant ??= $teamTenant;
+            }
+
+            if ($tenant !== null) {
+                Tenant::set($tenant);
             }
 
             if ($event->input->hasParameterOption('--workspace')) {
